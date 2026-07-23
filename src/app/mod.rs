@@ -37,7 +37,7 @@ pub async fn run(config_dir: &str) -> AppResult {
 
         let state_clone = Arc::clone(&state);
         tokio::spawn(async move {
-            supervise_program(name, prog_config, state_clone).await;
+            supervisord_app(name, prog_config, state_clone).await;
         });
     }
 
@@ -73,7 +73,7 @@ pub async fn run(config_dir: &str) -> AppResult {
     Ok(())
 }
 
-pub(crate) async fn supervise_program(name: String, config: ProgramConfig, state: SharedState) {
+async fn supervisord_app(name: String, config: ProgramConfig, state: SharedState) {
     loop {
         let intent = {
             let s = state.read().await;
