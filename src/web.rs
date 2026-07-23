@@ -66,7 +66,11 @@ struct ProcessStatusDto {
     name: String,
     status: String,
     intent: String,
-    memory_bytes: Option<u64>,
+    mem: Option<f64>,
+    command: String,
+    directory: Option<String>,
+    autostart: bool,
+    autorestart: bool,
 }
 
 async fn api_status(state: SharedState) -> Json<Vec<ProcessStatusDto>> {
@@ -79,20 +83,28 @@ async fn api_status(state: SharedState) -> Json<Vec<ProcessStatusDto>> {
             Status::Exited(c) => format!("Exited (code {})", c),
             Status::Failed(e) => format!("Failed: {}", e),
         };
-        let memory_bytes = match ps.status {
-            Status::Running(pid) => crate::platform::process_memory_bytes(pid),
+        let mem = match ps.status {
+            Status::Running(pid) => crate::platform::process_memory_bytes(pid)
+                .map(|bytes| bytes as f64 / 1024.0 / 1024.0),
             _ => None,
         };
         let intent_str = match ps.intent {
             Intent::Run => "Run".to_string(),
             Intent::Stop => "Stop".to_string(),
         };
+        let program = s.config.program.get(name);
 
         data.push(ProcessStatusDto {
             name: name.clone(),
             status: status_str,
             intent: intent_str,
-            memory_bytes,
+            mem,
+            command: program
+                .map(|config| config.command.clone())
+                .unwrap_or_default(),
+            directory: program.and_then(|config| config.directory.clone()),
+            autostart: program.is_some_and(|config| config.autostart),
+            autorestart: program.is_some_and(|config| config.autorestart),
         });
     }
     data.sort_by(|a, b| a.name.cmp(&b.name));

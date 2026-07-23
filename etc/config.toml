@@ -12,7 +12,7 @@ log.dir="./logs"
 # 是否打印到控制台
 log.console = true
 #过滤的模块
-log.filters = ["oxana::executor","oxana::coordinator","reqwest","hyper_util"]
+log.filters = []
 
 
 # web 配置

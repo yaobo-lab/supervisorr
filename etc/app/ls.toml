@@ -4,4 +4,4 @@ directory = "/home/luke/supervisord"
 autostart = true
 autorestart = true
 stdout_logfile = "/home/luke/supervisord/ls.log"
-stderr_logfile = "/home/luke/supervisord/ls.err"
+stderr_logfile = "/home/luke/supervisord/ls.err"a

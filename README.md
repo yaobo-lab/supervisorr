@@ -26,7 +26,6 @@ etc/
 Each program has its own TOML file under `app/`:
 
 ```toml
-[program]
 name = "my_app"
 command = "node index.js"
 directory = "/var/www/my_app"

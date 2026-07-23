@@ -92,7 +92,7 @@ pub fn load_directory(path: &Path) -> AppResult<Config> {
         }
 
         let program = match config::read_config::<ProgramConfig>(&file_path.to_string_lossy()) {
-            Ok(p) => p,
+            Ok(program) => program,
             Err(e) => {
                 log::error!(
                     "program config file:{},err:{}",
