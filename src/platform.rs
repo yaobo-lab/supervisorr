@@ -1,6 +1,5 @@
-use std::path::Path;
 use tokio::process::Command;
-
+use toolkit_rs::AppResult;
 pub fn default_ipc_endpoint() -> String {
     #[cfg(unix)]
     {
@@ -48,7 +47,7 @@ pub fn command(command_line: &str) -> Command {
     }
 }
 
-pub async fn terminate_process_tree(pid: u32) -> anyhow::Result<()> {
+pub async fn terminate_process_tree(pid: u32) -> AppResult {
     #[cfg(unix)]
     {
         use nix::sys::signal::{Signal, kill};
@@ -66,25 +65,6 @@ pub async fn terminate_process_tree(pid: u32) -> anyhow::Result<()> {
         if !status.success() {
             anyhow::bail!("taskkill failed with status {status}");
         }
-    }
-
-    Ok(())
-}
-
-pub async fn make_executable(path: &Path) -> anyhow::Result<()> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-
-        let metadata = tokio::fs::metadata(path).await?;
-        let mut permissions = metadata.permissions();
-        permissions.set_mode(0o755);
-        tokio::fs::set_permissions(path, permissions).await?;
-    }
-
-    #[cfg(windows)]
-    {
-        let _ = path;
     }
 
     Ok(())

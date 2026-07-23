@@ -7,21 +7,19 @@ use std::fs::OpenOptions;
 use std::process::Stdio;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use toolkit_rs::AppResult;
 
-pub async fn run(config_dir: &str) -> anyhow::Result<()> {
+pub async fn run(config_dir: &str) -> AppResult {
     let config_dir_path = std::path::Path::new(config_dir);
     if !config_dir_path.is_dir() {
-        eprintln!("Configuration directory not found at: {}", config_dir);
-        eprintln!("Run `supervisord init` to generate a default configuration directory.");
+        log::error!("Configuration directory not found at: {}", config_dir);
+        log::error!("Run `supervisord init` to generate a default configuration directory.");
         std::process::exit(1);
     }
-    println!("Starting supervisord daemon using config directory: {config_dir}");
+    log::info!("Starting supervisord daemon using config directory: {config_dir}");
     let config = crate::config::load_directory(config_dir_path)?;
 
-    let state = Arc::new(RwLock::new(AppState::new(
-        config.clone(),
-        config_dir.to_string(),
-    )));
+    let state = Arc::new(RwLock::new(AppState::new(config.clone())));
 
     for (name, prog_config) in config.program.into_iter() {
         let intent = if prog_config.autostart {
@@ -43,11 +41,7 @@ pub async fn run(config_dir: &str) -> anyhow::Result<()> {
         });
     }
 
-    let default_socket_path = crate::platform::default_ipc_endpoint();
-    let socket_path = config
-        .supervisord
-        .and_then(|s| s.socket_file)
-        .unwrap_or(default_socket_path);
+    let socket_path = crate::platform::default_ipc_endpoint();
     let socket_path = crate::platform::normalize_ipc_endpoint(&socket_path);
 
     let state_clone = Arc::clone(&state);
@@ -211,7 +205,7 @@ async fn shutdown_processes(state: &SharedState) {
 }
 
 #[cfg(unix)]
-async fn wait_for_shutdown() -> anyhow::Result<()> {
+async fn wait_for_shutdown() -> AppResult {
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
     tokio::select! {
         result = tokio::signal::ctrl_c() => {
@@ -226,7 +220,7 @@ async fn wait_for_shutdown() -> anyhow::Result<()> {
 }
 
 #[cfg(windows)]
-async fn wait_for_shutdown() -> anyhow::Result<()> {
+async fn wait_for_shutdown() -> AppResult {
     tokio::signal::ctrl_c().await?;
     println!("Received Ctrl+C. Shutting down.");
     Ok(())

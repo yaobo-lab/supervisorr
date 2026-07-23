@@ -43,6 +43,8 @@ NODE_ENV = "production"
 Base Web and logging settings belong in `config.toml`:
 
 ```toml
+socket_file = "supervisord"
+
 log.level = 3
 log.dir = "./logs"
 log.console = true

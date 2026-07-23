@@ -1,7 +1,7 @@
 use crate::app::state::{Intent, SharedState, Status};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-
+use toolkit_rs::AppResult;
 #[derive(Serialize, Deserialize, Debug)]
 pub enum IpcRequest {
     Status,
@@ -17,7 +17,7 @@ pub enum IpcResponse {
 }
 
 #[cfg(unix)]
-pub async fn setup_ipc(endpoint: &str, state: SharedState) -> anyhow::Result<()> {
+pub async fn setup_ipc(endpoint: &str, state: SharedState) -> AppResult {
     use std::os::unix::fs::PermissionsExt;
     use std::sync::Arc;
     use tokio::net::UnixListener;
@@ -46,7 +46,7 @@ pub async fn setup_ipc(endpoint: &str, state: SharedState) -> anyhow::Result<()>
 }
 
 #[cfg(windows)]
-pub async fn setup_ipc(endpoint: &str, state: SharedState) -> anyhow::Result<()> {
+pub async fn setup_ipc(endpoint: &str, state: SharedState) -> AppResult {
     use std::sync::Arc;
     use tokio::net::windows::named_pipe::ServerOptions;
 
@@ -63,7 +63,7 @@ pub async fn setup_ipc(endpoint: &str, state: SharedState) -> anyhow::Result<()>
     }
 }
 
-async fn handle_client<S>(mut stream: S, state: SharedState) -> anyhow::Result<()>
+async fn handle_client<S>(mut stream: S, state: SharedState) -> AppResult
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {

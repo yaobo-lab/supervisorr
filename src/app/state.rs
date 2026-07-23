@@ -27,15 +27,13 @@ use crate::config::Config;
 pub struct AppState {
     pub processes: HashMap<String, ProcessState>,
     pub config: Config,
-    pub config_dir: String,
 }
 
 impl AppState {
-    pub fn new(config: Config, config_dir: String) -> Self {
+    pub fn new(config: Config) -> Self {
         Self {
             processes: HashMap::new(),
             config,
-            config_dir,
         }
     }
 }

@@ -10,84 +10,18 @@
         .stopped { border-color: #e74c3c; }
         .title { font-size: 1.2em; font-weight: bold; margin-bottom: 5px; }
         .info { font-size: 0.9em; color: #aaa; margin-bottom: 8px; }
-        .tunnel-info { font-size: 0.85em; color: #f39c12; font-family: monospace; }
         .btn-group { display: flex; gap: 8px; }
         .btn { padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; color: white; font-weight: bold; }
         .btn-start { background: #2ecc71; }
         .btn-stop { background: #e74c3c; }
-        .btn-tunnel-start { background: #f39c12; }
-        .btn-tunnel-stop { background: #d35400; }
-        #drop-zone {
-            border: 2px dashed #555;
-            border-radius: 8px;
-            padding: 30px;
-            text-align: center;
-            margin-bottom: 20px;
-            background: #1a1a1a;
-            color: #888;
-            transition: all 0.2s;
-        }
-        #drop-zone.dragover {
-            border-color: #2ecc71;
-            background: #153320;
-            color: #2ecc71;
-        }
     </style>
 </head>
 <body>
     <h1>supervisord Dashboard</h1>
     
-    <div id="drop-zone" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
-        Drag & Drop an Executable Here to Deploy
-    </div>
-
     <div id="processes">Loading processes...</div>
 
     <script>
-        function handleDragOver(e) {
-            e.preventDefault();
-            document.getElementById('drop-zone').classList.add('dragover');
-        }
-
-        function handleDragLeave(e) {
-            e.preventDefault();
-            document.getElementById('drop-zone').classList.remove('dragover');
-        }
-
-        async function handleDrop(e) {
-            e.preventDefault();
-            const dropZone = document.getElementById('drop-zone');
-            dropZone.classList.remove('dragover');
-            
-            const file = e.dataTransfer.files[0];
-            if (!file) return;
-
-            dropZone.innerText = "Uploading " + file.name + "...";
-
-            const formData = new FormData();
-            formData.append("executable", file);
-
-            try {
-                const res = await fetch('/api/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const data = await res.json();
-                if (data.success) {
-                    dropZone.innerText = "Drag & Drop an Executable Here to Deploy";
-                    fetchStatus();
-                } else {
-                    dropZone.innerText = "Error: " + data.error;
-                    setTimeout(() => { dropZone.innerText = "Drag & Drop an Executable Here to Deploy"; }, 3000);
-                }
-            } catch(e) {
-                console.error(e);
-                dropZone.innerText = "Upload failed!";
-                setTimeout(() => { dropZone.innerText = "Drag & Drop an Executable Here to Deploy"; }, 3000);
-            }
-        }
-
         async function fetchStatus() {
             try {
                 const response = await fetch('/api/status');
@@ -101,11 +35,6 @@
                 }
 
                 data.forEach(p => {
-                    const hasTunnel = p.tunnel_domain !== null && p.tunnel_domain !== undefined;
-                    const tunnelBtnHtml = hasTunnel 
-                        ? `<button class="btn btn-tunnel-stop" onclick="sendTunnel('stop', '${p.name}')">Stop Tunnel</button>`
-                        : `<button class="btn btn-tunnel-start" onclick="sendTunnel('start', '${p.name}')">Start Tunnel</button>`;
-
                     const card = document.createElement('div');
                     card.className = 'card ' + (p.status.includes('Running') ? 'running' : 'stopped');
                     card.innerHTML = `
@@ -113,38 +42,15 @@
                             <div>
                                 <div class="title">${p.name}</div>
                                 <div class="info">Status: ${p.status} | Intent: ${p.intent}</div>
-                                <div class="tunnel-info" id="tunnel-${p.name}"></div>
                             </div>
                             <div class="btn-group">
                                 <button class="btn btn-start" onclick="sendAction('start', '${p.name}')">Start</button>
                                 <button class="btn btn-stop" onclick="sendAction('stop', '${p.name}')">Stop</button>
-                                ${tunnelBtnHtml}
                             </div>
                         </div>
                     `;
                     container.appendChild(card);
 
-                    // Resolve tunnel URL display
-                    if (hasTunnel) {
-                        if (p.tunnel_domain === "Quick Tunnel (Check Logs)") {
-                            // Poll for the actual quick tunnel URL
-                            fetch('/api/tunnel_url', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ target: p.name })
-                            }).then(r => r.json()).then(d => {
-                                const el = document.getElementById('tunnel-' + p.name);
-                                if (el && d.url) {
-                                    el.innerHTML = `🔗 <a href="${d.url}" target="_blank" style="color:#f39c12;">${d.url}</a>`;
-                                } else if (el) {
-                                    el.innerText = "⏳ Quick Tunnel starting...";
-                                }
-                            }).catch(() => {});
-                        } else {
-                            const el = document.getElementById('tunnel-' + p.name);
-                            if (el) el.innerHTML = `🔗 <a href="https://${p.tunnel_domain}" target="_blank" style="color:#f39c12;">${p.tunnel_domain}</a>`;
-                        }
-                    }
                 });
             } catch(e) {
                 console.error(e);
@@ -158,31 +64,6 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action, target })
                 });
-                fetchStatus();
-            } catch(e) {
-                console.error(e);
-            }
-        }
-
-        async function sendTunnel(action, target) {
-            let domain = "";
-            let port = null;
-
-            if (action === "start") {
-                domain = prompt("Enter domain (e.g. subdomain.domain.com), or leave blank for a Quick Tunnel:");
-                if (domain === null) return;
-            }
-
-            try {
-                const res = await fetch('/api/tunnel', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action, target, domain, port })
-                });
-                const data = await res.json();
-                if (!data.success) {
-                    alert("Tunnel error: " + data.error);
-                }
                 fetchStatus();
             } catch(e) {
                 console.error(e);

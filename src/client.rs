@@ -1,7 +1,7 @@
 use crate::app::ipc::{IpcRequest, IpcResponse};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-
-async fn exchange<S>(mut stream: S, request: IpcRequest) -> anyhow::Result<IpcResponse>
+use toolkit_rs::AppResult;
+async fn exchange<S>(mut stream: S, request: IpcRequest) -> AppResult<IpcResponse>
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {
@@ -12,7 +12,7 @@ where
     Ok(serde_json::from_slice(&buffer)?)
 }
 
-async fn send_request(request: IpcRequest) -> anyhow::Result<IpcResponse> {
+async fn send_request(request: IpcRequest) -> AppResult<IpcResponse> {
     let configured_endpoint = std::env::var("supervisord_IPC")
         .unwrap_or_else(|_| crate::platform::default_ipc_endpoint());
     let endpoint = crate::platform::normalize_ipc_endpoint(&configured_endpoint);
@@ -30,7 +30,7 @@ async fn send_request(request: IpcRequest) -> anyhow::Result<IpcResponse> {
     }
 }
 
-pub async fn status() -> anyhow::Result<()> {
+pub async fn status() -> AppResult {
     match send_request(IpcRequest::Status).await? {
         IpcResponse::StatusData(data) => {
             if data.is_empty() {
@@ -46,7 +46,7 @@ pub async fn status() -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn start(target: &str) -> anyhow::Result<()> {
+pub async fn start(target: &str) -> AppResult {
     match send_request(IpcRequest::Start {
         target: target.to_string(),
     })
@@ -59,7 +59,7 @@ pub async fn start(target: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn stop(target: &str) -> anyhow::Result<()> {
+pub async fn stop(target: &str) -> AppResult {
     match send_request(IpcRequest::Stop {
         target: target.to_string(),
     })
