@@ -14,7 +14,6 @@ impl WebServerConf {
     pub fn into_addr(&self) -> String {
         format!("{}:{}", self.listen_addr, self.port)
     }
-
     pub fn into_http_addr(&self) -> String {
         format!("http://{}:{}", self.listen_addr, self.port)
     }
@@ -26,13 +25,6 @@ pub struct Config {
     pub web: WebServerConf,
     #[serde(default)]
     pub program: HashMap<String, ProgramConfig>,
-}
-
-pub fn load(path: &str) -> Config {
-    config::read_config::<Config>(path).unwrap_or_else(|error| {
-        println!("read config err:{error}");
-        process::exit(1);
-    })
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -57,6 +49,13 @@ fn default_true() -> bool {
     true
 }
 
+pub fn load_basic(path: &str) -> Config {
+    config::read_config::<Config>(path).unwrap_or_else(|error| {
+        println!("read config err:{error}");
+        process::exit(1);
+    })
+}
+
 pub fn load_directory(path: &Path) -> AppResult<Config> {
     if !path.is_dir() {
         anyhow::bail!("Configuration path is not a directory: {}", path.display());
@@ -67,7 +66,7 @@ pub fn load_directory(path: &Path) -> AppResult<Config> {
         anyhow::bail!("Base configuration file not found: {}", base_path.display());
     }
 
-    let mut config: Config = load(&base_path.to_string_lossy());
+    let mut config: Config = load_basic(&base_path.to_string_lossy());
     if !config.program.is_empty() {
         anyhow::bail!(
             "{} must contain only base settings; move [program] to app/",

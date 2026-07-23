@@ -45,7 +45,7 @@ pub async fn cli() -> AppResult {
     };
     let base_config_path = std::path::Path::new(config_path).join("config.toml");
     if base_config_path.is_file() {
-        let cfg = config::load(&base_config_path.to_string_lossy());
+        let cfg = config::load_basic(&base_config_path.to_string_lossy());
         logger::setup(cfg.log.clone()).unwrap_or_else(|error| {
             println!("日志初始化失败: {error:?}");
             process::exit(1);
