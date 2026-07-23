@@ -56,8 +56,7 @@ pub async fn cli() -> AppResult {
 }
 
 fn init(config: &str) -> AppResult {
-    let default_config = r#"[program]
-name = "demo"
+    let default_config = r#"name = "demo"
 command = "echo 'Replace this with your process !'"
 directory = "."
 autostart = true

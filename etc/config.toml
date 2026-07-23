@@ -1,6 +1,4 @@
- 
-
-# 日志配置
+ # 日志配置
 # 日志级别(1:error,2:warn,3:info,4:debug,5:Trace)
 log.level = 4
 #大小切割(单位M)
