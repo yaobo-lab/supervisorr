@@ -59,9 +59,15 @@ pub async fn start_web(state: SharedState) -> anyhow::Result<()> {
     let config_bind = {
         let s = state.read().await;
         s.config
-            .supervisorr
+            .web
             .as_ref()
-            .and_then(|sup| sup.web_bind.clone())
+            .map(|web| web.into_addr())
+            .or_else(|| {
+                s.config
+                    .supervisorr
+                    .as_ref()
+                    .and_then(|sup| sup.web_bind.clone())
+            })
             .unwrap_or_else(|| "127.0.0.1:3000".to_string())
     };
 

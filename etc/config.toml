@@ -1,0 +1,21 @@
+ 
+# 日志配置
+# 日志级别(1:error,2:warn,3:info,4:debug,5:Trace)
+log.level = 4
+#大小切割(单位M)
+log.size_mb = 5
+# 保留天数
+# keep_day = 3
+# 打印风格 Default,Line,Module,Full
+log.style = "Module"
+# 日志目录
+log.dir="./logs"
+# 是否打印到控制台
+log.console = true
+#过滤的模块
+log.filters = ["oxana::executor","oxana::coordinator","reqwest","hyper_util"]
+
+
+# web 配置 7017
+web.port = 18097
+web.listen_addr = "0.0.0.0"

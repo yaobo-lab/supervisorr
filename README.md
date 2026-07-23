@@ -12,8 +12,18 @@ A zero-dependency, ultra-low-memory process supervisor in Rust, perfect for edge
 
 ## Configuration
 
-Place program files under `/etc/supervisorr/` or pass another configuration
-directory with `-c`. Each program has its own TOML file:
+The configuration root contains a base `config.toml` and an `app/` directory.
+Pass the configuration root with `-c`:
+
+```text
+etc/
+├── config.toml
+└── app/
+    ├── my_app.toml
+    └── worker.toml
+```
+
+Each program has its own TOML file under `app/`:
 
 ```toml
 [program]
@@ -30,17 +40,21 @@ PORT = "8080"
 NODE_ENV = "production"
 ```
 
-Global daemon settings can be placed in `/etc/supervisorr/supervisorr.toml`:
+Base Web and logging settings belong in `config.toml`:
 
 ```toml
-[supervisorr]
-socket_file = "supervisorr"
-web_bind = "127.0.0.1:3000"
+log.level = 3
+log.dir = "./logs"
+log.console = true
+
+web.port = 3000
+web.listen_addr = "127.0.0.1"
 ```
 
 ## Usage
 
-First, generate an `etc/` directory containing `my_app.toml`:
+First, generate an `etc/` directory containing `config.toml` and
+`app/my_app.toml`:
 ```bash
 ./supervisorr init
 ```

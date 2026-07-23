@@ -1,11 +1,49 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::process;
+use toolkit_rs::{config, logger::LogConfig};
 
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+pub struct Conf {
+    pub log: LogConfig,
+    #[serde(default)]
+    pub redis_uri: String,
+    pub web: WebServerConf,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
+pub struct WebServerConf {
+    pub port: u16,
+    pub listen_addr: String,
+}
+
+impl WebServerConf {
+    pub fn into_addr(&self) -> String {
+        format!("{}:{}", self.listen_addr, self.port)
+    }
+
+    pub fn into_http_addr(&self) -> String {
+        format!("http://{}:{}", self.listen_addr, self.port)
+    }
+}
+
+pub fn load(path: &str) -> Conf {
+    config::read_config::<Conf>(path).unwrap_or_else(|e| {
+        println!("read config err:{e}");
+        process::exit(1);
+    })
+}
+
+//
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supervisorr: Option<SupervisorrConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log: Option<LogConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub web: Option<WebServerConf>,
     #[serde(default)]
     pub program: HashMap<String, ProgramConfig>,
 }
@@ -14,6 +52,10 @@ pub struct Config {
 struct ConfigFile {
     #[serde(skip_serializing_if = "Option::is_none")]
     supervisorr: Option<SupervisorrConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    log: Option<LogConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    web: Option<WebServerConf>,
     #[serde(skip_serializing_if = "Option::is_none")]
     program: Option<NamedProgramConfig>,
 }
@@ -70,9 +112,36 @@ pub fn load_directory(path: &Path) -> anyhow::Result<Config> {
 
     let mut config = Config {
         supervisorr: None,
+        log: None,
+        web: None,
         program: HashMap::new(),
     };
-    let mut entries = std::fs::read_dir(path)?.collect::<Result<Vec<_>, _>>()?;
+
+    let base_path = path.join("config.toml");
+    if !base_path.is_file() {
+        anyhow::bail!("Base configuration file not found: {}", base_path.display());
+    }
+    let base_contents = std::fs::read_to_string(&base_path)?;
+    let base: ConfigFile = toml::from_str(&base_contents)
+        .map_err(|error| anyhow::anyhow!("{}: {error}", base_path.display()))?;
+    if base.program.is_some() {
+        anyhow::bail!(
+            "{} must contain only base settings; move [program] to app/",
+            base_path.display()
+        );
+    }
+    config.supervisorr = base.supervisorr;
+    config.log = base.log;
+    config.web = base.web;
+
+    let app_dir = path.join("app");
+    if !app_dir.is_dir() {
+        anyhow::bail!(
+            "Program configuration directory not found: {}",
+            app_dir.display()
+        );
+    }
+    let mut entries = std::fs::read_dir(&app_dir)?.collect::<Result<Vec<_>, _>>()?;
     entries.sort_by_key(|entry| entry.file_name());
 
     for entry in entries {
@@ -85,11 +154,9 @@ pub fn load_directory(path: &Path) -> anyhow::Result<Config> {
         let file: ConfigFile = toml::from_str(&contents)
             .map_err(|error| anyhow::anyhow!("{}: {error}", file_path.display()))?;
 
-        if let Some(supervisorr) = file.supervisorr
-            && config.supervisorr.replace(supervisorr).is_some()
-        {
+        if file.supervisorr.is_some() || file.log.is_some() || file.web.is_some() {
             anyhow::bail!(
-                "Multiple [supervisorr] sections found; latest file: {}",
+                "Base settings are not allowed in program file: {}",
                 file_path.display()
             );
         }
@@ -121,12 +188,16 @@ pub fn save_program(
 
     let file = ConfigFile {
         supervisorr: None,
+        log: None,
+        web: None,
         program: Some(NamedProgramConfig {
             name: name.to_string(),
             config: config.clone(),
         }),
     };
-    let path = directory.join(format!("{name}.toml"));
+    let app_dir = directory.join("app");
+    std::fs::create_dir_all(&app_dir)?;
+    let path = app_dir.join(format!("{name}.toml"));
     std::fs::write(&path, toml::to_string_pretty(&file)?)?;
     Ok(path)
 }
