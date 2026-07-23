@@ -1,5 +1,5 @@
 [package]
-name = "supervisorr"
+name = "supervisord"
 version = "0.1.0"
 edition = "2024"
 

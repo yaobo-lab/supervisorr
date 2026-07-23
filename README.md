@@ -1,13 +1,13 @@
-# Supervisorr
+# supervisord
 
-A zero-dependency, ultra-low-memory process supervisor in Rust, perfect for edge devices, old ARM hardware, or minimalist container setups. `supervisorr` is designed to be a drop-in single-binary replacement for legacy Python-based `supervisord`, giving you the same control without the bloat.
+A zero-dependency, ultra-low-memory process supervisor in Rust, perfect for edge devices, old ARM hardware, or minimalist container setups. `supervisord` is designed to be a drop-in single-binary replacement for legacy Python-based `supervisord`, giving you the same control without the bloat.
 
 ## Features
 
 - **Micro Footprint**: Statically compiled asynchronous Rust daemon using Tokio. Zero system library dependencies required.
 - **Embedded Web Dashboard**: Fully featured, interactive HTML/JS dashboard embedded directly in the binary using `axum` and `rust-embed`. Manage your cluster securely from the browser on port `3000`.
 - **Integrated Logging**: Native `stdout` and `stderr` routing explicitly to target log files configured per-process.
-- **Local IPC API**: Commands use a Unix domain socket on Unix and a named pipe (`\\.\pipe\supervisorr`) on Windows.
+- **Local IPC API**: Commands use a Unix domain socket on Unix and a named pipe (`\\.\pipe\supervisord`) on Windows.
 - **Graceful Takedowns**: Natively listens to `SIGINT` and `SIGTERM` to safely terminate workers and clean up OS socket bindings.
 
 ## Configuration
@@ -56,12 +56,12 @@ web.listen_addr = "127.0.0.1"
 First, generate an `etc/` directory containing `config.toml` and
 `app/my_app.toml`:
 ```bash
-./supervisorr init
+./supervisord init
 ```
 
 Start the Daemon using that directory:
 ```bash
-./supervisorr daemon -c ./etc
+./supervisord daemon -c ./etc
 ```
 
 The Web dashboard is enabled by default. To build a smaller daemon without the
@@ -71,19 +71,19 @@ Web server and embedded static files:
 cargo build --release --no-default-features
 ```
 
-On Windows, run `supervisorr.exe daemon -c .\etc`. Program commands
+On Windows, run `supervisord.exe daemon -c .\etc`. Program commands
 are executed through `cmd.exe`; Unix uses `sh`. To connect the CLI to a custom
-IPC endpoint, set `SUPERVISORR_IPC` to the configured socket path or named-pipe
+IPC endpoint, set `supervisord_IPC` to the configured socket path or named-pipe
 name.
 
 Manage Processes via Client CLI:
 ```bash
 # Check the status of all managed applications
-./supervisorr status
+./supervisord status
 
 # Start or stop a target process
-./supervisorr start my_app
-./supervisorr stop my_app
+./supervisord start my_app
+./supervisord stop my_app
 ```
 
 ## API Endpoint

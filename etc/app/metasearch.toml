@@ -1,11 +1,11 @@
 [program]
 name = "metasearch"
-command = "/home/luke/supervisorr/metasearch"
-directory = "/home/luke/supervisorr"
+command = "/home/luke/supervisord/metasearch"
+directory = "/home/luke/supervisord"
 autostart = true
 autorestart = true
-stdout_logfile = "/home/luke/supervisorr/metasearch.log"
-stderr_logfile = "/home/luke/supervisorr/metasearch.err"
+stdout_logfile = "/home/luke/supervisord/metasearch.log"
+stderr_logfile = "/home/luke/supervisord/metasearch.err"
 
 [program.tunnel]
 domain = "quick"

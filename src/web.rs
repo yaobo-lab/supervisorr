@@ -64,7 +64,7 @@ pub async fn start_web(state: SharedState) -> anyhow::Result<()> {
             .map(|web| web.into_addr())
             .or_else(|| {
                 s.config
-                    .supervisorr
+                    .supervisord
                     .as_ref()
                     .and_then(|sup| sup.web_bind.clone())
             })

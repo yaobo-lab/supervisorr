@@ -28,7 +28,7 @@ for (name, prog_config) in config.program {
 逻辑上类似：
 
 ```text
-supervisorr
+supervisord
 ├─ 监督任务：my_app
 ├─ 监督任务：metasearch
 └─ 监督任务：worker
@@ -174,7 +174,7 @@ status = Running(1234)
 执行：
 
 ```bash
-supervisorr start my_app
+supervisord start my_app
 ```
 
 CLI 通过 Unix Socket 告诉 Daemon：
@@ -190,7 +190,7 @@ CLI 通过 Unix Socket 告诉 Daemon：
 执行：
 
 ```bash
-supervisorr stop my_app
+supervisord stop my_app
 ```
 
 Daemon 会：
@@ -239,7 +239,7 @@ intent = Stop
 项目实际启动的是：
 
 ```text
-supervisorr
+supervisord
   └─ sh -c "node index.js"
        └─ node index.js
 ```
@@ -274,11 +274,11 @@ command = "node index.js &"
 sh 启动 node
 sh 立即退出
 child.wait() 立即返回
-supervisorr 误以为程序退出
+supervisord 误以为程序退出
 再次启动
 最终产生多个 node 进程
 ```
 
 这也是为什么成熟的进程管理器通常要求程序保持前台运行，并通过 Unix 进程组或 Windows Job Object 管理完整的进程树。
 
-一句话概括：**配置告诉 supervisorr 要管理谁，`spawn()` 建立父子关系，`child.wait().await` 由操作系统通知它子进程何时退出，监督循环再根据用户意图和 `autorestart` 决定是否重启。**
+一句话概括：**配置告诉 supervisord 要管理谁，`spawn()` 建立父子关系，`child.wait().await` 由操作系统通知它子进程何时退出，监督循环再根据用户意图和 `autorestart` 决定是否重启。**

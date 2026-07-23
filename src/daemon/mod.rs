@@ -12,10 +12,10 @@ pub async fn run(config_dir: &str) -> anyhow::Result<()> {
     let config_dir_path = std::path::Path::new(config_dir);
     if !config_dir_path.is_dir() {
         eprintln!("Configuration directory not found at: {}", config_dir);
-        eprintln!("Run `supervisorr init` to generate a default configuration directory.");
+        eprintln!("Run `supervisord init` to generate a default configuration directory.");
         std::process::exit(1);
     }
-    println!("Starting supervisorr daemon using config directory: {config_dir}");
+    println!("Starting supervisord daemon using config directory: {config_dir}");
     let config = crate::config::load_directory(config_dir_path)?;
 
     let state = Arc::new(RwLock::new(AppState::new(
@@ -45,7 +45,7 @@ pub async fn run(config_dir: &str) -> anyhow::Result<()> {
 
     let default_socket_path = crate::platform::default_ipc_endpoint();
     let socket_path = config
-        .supervisorr
+        .supervisord
         .and_then(|s| s.socket_file)
         .unwrap_or(default_socket_path);
     let socket_path = crate::platform::normalize_ipc_endpoint(&socket_path);

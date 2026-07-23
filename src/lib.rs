@@ -13,7 +13,7 @@ use toolkit_rs::{
 };
 
 #[derive(Parser)]
-#[command(name = "supervisorr")]
+#[command(name = "supervisord")]
 #[command(about = "A zero-dependency process manager", long_about = None)]
 pub struct Cli {
     #[command(subcommand)]

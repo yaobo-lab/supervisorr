@@ -5,14 +5,14 @@ pub fn default_ipc_endpoint() -> String {
     #[cfg(unix)]
     {
         std::env::temp_dir()
-            .join("supervisorr.sock")
+            .join("supervisord.sock")
             .to_string_lossy()
             .into_owned()
     }
 
     #[cfg(windows)]
     {
-        r"\\.\pipe\supervisorr".to_string()
+        r"\\.\pipe\supervisord".to_string()
     }
 }
 

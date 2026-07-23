@@ -13,7 +13,7 @@ where
 }
 
 async fn send_request(request: IpcRequest) -> anyhow::Result<IpcResponse> {
-    let configured_endpoint = std::env::var("SUPERVISORR_IPC")
+    let configured_endpoint = std::env::var("supervisord_IPC")
         .unwrap_or_else(|_| crate::platform::default_ipc_endpoint());
     let endpoint = crate::platform::normalize_ipc_endpoint(&configured_endpoint);
 

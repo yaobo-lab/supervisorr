@@ -39,7 +39,7 @@ pub fn load(path: &str) -> Conf {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub supervisorr: Option<SupervisorrConfig>,
+    pub supervisord: Option<SupervisordConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub log: Option<LogConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -51,7 +51,7 @@ pub struct Config {
 #[derive(Debug, Serialize, Deserialize)]
 struct ConfigFile {
     #[serde(skip_serializing_if = "Option::is_none")]
-    supervisorr: Option<SupervisorrConfig>,
+    supervisord: Option<SupervisordConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     log: Option<LogConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -68,7 +68,7 @@ struct NamedProgramConfig {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SupervisorrConfig {
+pub struct SupervisordConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub socket_file: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -111,7 +111,7 @@ pub fn load_directory(path: &Path) -> anyhow::Result<Config> {
     }
 
     let mut config = Config {
-        supervisorr: None,
+        supervisord: None,
         log: None,
         web: None,
         program: HashMap::new(),
@@ -130,7 +130,7 @@ pub fn load_directory(path: &Path) -> anyhow::Result<Config> {
             base_path.display()
         );
     }
-    config.supervisorr = base.supervisorr;
+    config.supervisord = base.supervisord;
     config.log = base.log;
     config.web = base.web;
 
@@ -154,7 +154,7 @@ pub fn load_directory(path: &Path) -> anyhow::Result<Config> {
         let file: ConfigFile = toml::from_str(&contents)
             .map_err(|error| anyhow::anyhow!("{}: {error}", file_path.display()))?;
 
-        if file.supervisorr.is_some() || file.log.is_some() || file.web.is_some() {
+        if file.supervisord.is_some() || file.log.is_some() || file.web.is_some() {
             anyhow::bail!(
                 "Base settings are not allowed in program file: {}",
                 file_path.display()
@@ -187,7 +187,7 @@ pub fn save_program(
     std::fs::create_dir_all(directory)?;
 
     let file = ConfigFile {
-        supervisorr: None,
+        supervisord: None,
         log: None,
         web: None,
         program: Some(NamedProgramConfig {
