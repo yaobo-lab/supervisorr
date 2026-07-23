@@ -11,8 +11,8 @@ pub enum Intent {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Status {
     Stopped,
-    Running(u32), // pid
-    Exited(i32),  // exit code
+    Running(u32),   // pid
+    Exited(i32),    // exit code
     Failed(String), // e.g. command not found
 }
 
@@ -27,15 +27,15 @@ use crate::config::Config;
 pub struct AppState {
     pub processes: HashMap<String, ProcessState>,
     pub config: Config,
-    pub config_path: String,
+    pub config_dir: String,
 }
 
 impl AppState {
-    pub fn new(config: Config, config_path: String) -> Self {
-        Self { 
+    pub fn new(config: Config, config_dir: String) -> Self {
+        Self {
             processes: HashMap::new(),
             config,
-            config_path,
+            config_dir,
         }
     }
 }

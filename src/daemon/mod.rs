@@ -2,36 +2,26 @@ pub mod ipc;
 pub mod state;
 pub mod web;
 
-use crate::config::{Config, ProgramConfig};
+use crate::config::ProgramConfig;
 use state::{AppState, Intent, ProcessState, SharedState, Status};
 use std::fs::OpenOptions;
 use std::process::Stdio;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-pub async fn run(config_path: &str) -> anyhow::Result<()> {
-    if !std::path::Path::new(config_path).exists() {
-        eprintln!("Configuration file not found at: {}", config_path);
-        eprintln!(
-            "Run `supervisorr init` to generate a default configuration file in your current directory."
-        );
+pub async fn run(config_dir: &str) -> anyhow::Result<()> {
+    let config_dir_path = std::path::Path::new(config_dir);
+    if !config_dir_path.is_dir() {
+        eprintln!("Configuration directory not found at: {}", config_dir);
+        eprintln!("Run `supervisorr init` to generate a default configuration directory.");
         std::process::exit(1);
     }
-    println!("Starting supervisorr daemon using config: {}", config_path);
-    let config_content = std::fs::read_to_string(config_path).unwrap_or_else(|_| "".to_string());
-
-    let config: Config = if config_content.is_empty() {
-        Config {
-            supervisorr: None,
-            program: std::collections::HashMap::new(),
-        }
-    } else {
-        toml::from_str(&config_content)?
-    };
+    println!("Starting supervisorr daemon using config directory: {config_dir}");
+    let config = crate::config::load_directory(config_dir_path)?;
 
     let state = Arc::new(RwLock::new(AppState::new(
         config.clone(),
-        config_path.to_string(),
+        config_dir.to_string(),
     )));
 
     for (name, prog_config) in config.program.into_iter() {

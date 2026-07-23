@@ -1,0 +1,8 @@
+[program]
+name = "ls"
+command = "/home/luke/supervisorr/ls"
+directory = "/home/luke/supervisorr"
+autostart = true
+autorestart = true
+stdout_logfile = "/home/luke/supervisorr/ls.log"
+stderr_logfile = "/home/luke/supervisorr/ls.err"

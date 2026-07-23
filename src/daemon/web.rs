@@ -370,15 +370,27 @@ async fn api_tunnel(
             is_quick,
         };
 
-        if let Some(prog) = s.config.program.get_mut(target) {
+        let updated_program = if let Some(prog) = s.config.program.get_mut(target) {
             prog.tunnel = Some(t_config.clone());
-        }
-
-        if let Ok(toml_str) = toml::to_string(&s.config) {
-            let _ = tokio::fs::write(&s.config_path, toml_str).await;
-        }
+            prog.clone()
+        } else {
+            return Json(ActionResponse {
+                success: false,
+                error: Some("Process not found".to_string()),
+            });
+        };
+        let config_dir = s.config_dir.clone();
 
         drop(s);
+
+        if let Err(error) =
+            crate::config::save_program(std::path::Path::new(&config_dir), target, &updated_program)
+        {
+            return Json(ActionResponse {
+                success: false,
+                error: Some(format!("Failed to save program config: {error}")),
+            });
+        }
 
         let state_clone = state.clone();
         let target_clone = target.clone();
@@ -429,12 +441,16 @@ async fn api_tunnel(
             error: None,
         })
     } else if payload.action == "stop" {
-        if let Some(prog) = s.config.program.get_mut(target) {
+        let updated_program = if let Some(prog) = s.config.program.get_mut(target) {
             prog.tunnel = None;
-        }
-        if let Ok(toml_str) = toml::to_string(&s.config) {
-            let _ = tokio::fs::write(&s.config_path, toml_str).await;
-        }
+            prog.clone()
+        } else {
+            return Json(ActionResponse {
+                success: false,
+                error: Some("Process not found".to_string()),
+            });
+        };
+        let config_dir = s.config_dir.clone();
 
         let tunnel_prog_name = format!("_tunnel_{}", target);
         let pid = if let Some(ps) = s.processes.get_mut(&tunnel_prog_name) {
@@ -447,6 +463,14 @@ async fn api_tunnel(
             None
         };
         drop(s);
+        if let Err(error) =
+            crate::config::save_program(std::path::Path::new(&config_dir), target, &updated_program)
+        {
+            return Json(ActionResponse {
+                success: false,
+                error: Some(format!("Failed to save program config: {error}")),
+            });
+        }
         if let Some(pid) = pid
             && let Err(error) = crate::platform::terminate_process_tree(pid).await
         {
@@ -555,12 +579,24 @@ async fn api_upload(state: SharedState, mut multipart: Multipart) -> Json<Action
                 tunnel: None,
             };
 
+            let config_dir = {
+                let s = state.read().await;
+                s.config_dir.clone()
+            };
+            if let Err(error) = crate::config::save_program(
+                std::path::Path::new(&config_dir),
+                &file_name,
+                &new_prog,
+            ) {
+                return Json(ActionResponse {
+                    success: false,
+                    error: Some(format!("Failed to save program config: {error}")),
+                });
+            }
+
             {
                 let mut s = state.write().await;
                 s.config.program.insert(file_name.clone(), new_prog.clone());
-                if let Ok(toml_str) = toml::to_string(&s.config) {
-                    let _ = fs::write(&s.config_path, toml_str).await;
-                }
                 s.processes.insert(
                     file_name.clone(),
                     ProcessState {

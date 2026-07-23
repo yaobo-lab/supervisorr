@@ -15,14 +15,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Initialize a new default config file
+    /// Initialize a config directory with an example program
     Init {
-        #[arg(short, long, default_value = "./supervisorr.toml")]
+        #[arg(short, long, default_value = "./etc")]
         config: String,
     },
     /// Starts the supervisor daemon
     Daemon {
-        #[arg(short, long, default_value = "/etc/supervisorr/supervisorr.toml")]
+        #[arg(short, long, default_value = "./etc")]
         config: String,
     },
     /// Status of processes
@@ -38,11 +38,8 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     match &cli.command {
         Commands::Init { config } => {
-            let default_config = r#"[supervisorr]
-# socket_file = "/path/to/supervisorr.sock"
-# On Windows, use a named pipe such as "supervisorr".
-
-[program.my_app]
+            let default_config = r#"[program]
+name = "my_app"
 command = "echo 'Replace this with your process !'"
 directory = "."
 autostart = true
@@ -50,8 +47,13 @@ autorestart = true
 stdout_logfile = "my_app.log"
 stderr_logfile = "my_app.err"
 "#;
-            std::fs::write(config, default_config.trim())?;
-            println!("Successfully generated default config at {}", config);
+            std::fs::create_dir_all(config)?;
+            let path = std::path::Path::new(config).join("my_app.toml");
+            std::fs::write(&path, default_config.trim())?;
+            println!(
+                "Successfully generated default config at {}",
+                path.display()
+            );
             Ok(())
         }
         Commands::Daemon { config } => daemon::run(config).await,

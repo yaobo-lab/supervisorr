@@ -12,10 +12,12 @@ A zero-dependency, ultra-low-memory process supervisor in Rust, perfect for edge
 
 ## Configuration
 
-Place your config under `/etc/supervisorr/supervisorr.toml` or load it specifically via `-c`.
+Place program files under `/etc/supervisorr/` or pass another configuration
+directory with `-c`. Each program has its own TOML file:
 
 ```toml
-[program.my_app]
+[program]
+name = "my_app"
 command = "node index.js"
 directory = "/var/www/my_app"
 autostart = true
@@ -23,24 +25,32 @@ autorestart = true
 stdout_logfile = "/var/log/my_app.log"
 stderr_logfile = "/var/log/my_app.err"
 
-[program.my_app.environment]
+[program.environment]
 PORT = "8080"
 NODE_ENV = "production"
 ```
 
+Global daemon settings can be placed in `/etc/supervisorr/supervisorr.toml`:
+
+```toml
+[supervisorr]
+socket_file = "supervisorr"
+web_bind = "127.0.0.1:3000"
+```
+
 ## Usage
 
-First, generate a default configuration file in your local directory natively:
+First, generate an `etc/` directory containing `my_app.toml`:
 ```bash
 ./supervisorr init
 ```
 
-Start the Daemon natively tracking the local file:
+Start the Daemon using that directory:
 ```bash
-./supervisorr daemon -c ./supervisorr.toml
+./supervisorr daemon -c ./etc
 ```
 
-On Windows, run `supervisorr.exe daemon -c .\supervisorr.toml`. Program commands
+On Windows, run `supervisorr.exe daemon -c .\etc`. Program commands
 are executed through `cmd.exe`; Unix uses `sh`. To connect the CLI to a custom
 IPC endpoint, set `SUPERVISORR_IPC` to the configured socket path or named-pipe
 name.
