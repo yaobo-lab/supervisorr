@@ -1,6 +1,7 @@
+mod client;
 mod config;
 mod daemon;
-mod client;
+mod platform;
 
 use clap::{Parser, Subcommand};
 
@@ -39,6 +40,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Init { config } => {
             let default_config = r#"[supervisorr]
 # socket_file = "/path/to/supervisorr.sock"
+# On Windows, use a named pipe such as "supervisorr".
 
 [program.my_app]
 command = "echo 'Replace this with your process !'"

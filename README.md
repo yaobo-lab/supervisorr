@@ -7,7 +7,7 @@ A zero-dependency, ultra-low-memory process supervisor in Rust, perfect for edge
 - **Micro Footprint**: Statically compiled asynchronous Rust daemon using Tokio. Zero system library dependencies required.
 - **Embedded Web Dashboard**: Fully featured, interactive HTML/JS dashboard embedded directly in the binary using `axum` and `rust-embed`. Manage your cluster securely from the browser on port `3000`.
 - **Integrated Logging**: Native `stdout` and `stderr` routing explicitly to target log files configured per-process.
-- **IPC UNIX API**: All commands are safely executed over a local Unix domain socket (`/tmp/supervisorr.sock`) using JSON. Connect your own tools identically to our CLI!
+- **Local IPC API**: Commands use a Unix domain socket on Unix and a named pipe (`\\.\pipe\supervisorr`) on Windows.
 - **Graceful Takedowns**: Natively listens to `SIGINT` and `SIGTERM` to safely terminate workers and clean up OS socket bindings.
 
 ## Configuration
@@ -39,6 +39,11 @@ Start the Daemon natively tracking the local file:
 ```bash
 ./supervisorr daemon -c ./supervisorr.toml
 ```
+
+On Windows, run `supervisorr.exe daemon -c .\supervisorr.toml`. Program commands
+are executed through `cmd.exe`; Unix uses `sh`. To connect the CLI to a custom
+IPC endpoint, set `SUPERVISORR_IPC` to the configured socket path or named-pipe
+name.
 
 Manage Processes via Client CLI:
 ```bash

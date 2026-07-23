@@ -1,17 +1,16 @@
-use axum::{
-    routing::{get, post},
-    Router,
-    response::{Html, IntoResponse, Json},
-};
-use axum::extract::Multipart;
-use tokio::fs;
-use std::os::unix::fs::PermissionsExt;
-use crate::daemon::state::{ProcessState, SharedState, Status, Intent};
 use crate::config::ProgramConfig;
+use crate::daemon::state::{Intent, ProcessState, SharedState, Status};
+use axum::extract::Multipart;
+use axum::{
+    Router,
+    response::{IntoResponse, Json},
+    routing::{get, post},
+};
 use rust_embed::Embed;
 use serde::Serialize;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use tokio::fs;
 
 #[derive(Embed)]
 #[folder = "src/web/"]
@@ -20,34 +19,55 @@ struct Asset;
 pub async fn start_web(state: SharedState) -> anyhow::Result<()> {
     let app = Router::new()
         .route("/", get(index_handler))
-        .route("/api/status", get({
-            let state = Arc::clone(&state);
-            move || api_status(state)
-        }))
-        .route("/api/action", post({
-            let state = Arc::clone(&state);
-            move |payload| api_action(state, payload)
-        }))
-        .route("/api/upload", post({
-            let state = Arc::clone(&state);
-            move |multipart| api_upload(state, multipart)
-        }))
-        .route("/api/tunnel", post({
-            let state = Arc::clone(&state);
-            move |payload| api_tunnel(state, payload)
-        }))
-        .route("/api/tunnel_url", post({
-            let state = Arc::clone(&state);
-            move |payload| api_tunnel_url(state, payload)
-        }))
+        .route(
+            "/api/status",
+            get({
+                let state = Arc::clone(&state);
+                move || api_status(state)
+            }),
+        )
+        .route(
+            "/api/action",
+            post({
+                let state = Arc::clone(&state);
+                move |payload| api_action(state, payload)
+            }),
+        )
+        .route(
+            "/api/upload",
+            post({
+                let state = Arc::clone(&state);
+                move |multipart| api_upload(state, multipart)
+            }),
+        )
+        .route(
+            "/api/tunnel",
+            post({
+                let state = Arc::clone(&state);
+                move |payload| api_tunnel(state, payload)
+            }),
+        )
+        .route(
+            "/api/tunnel_url",
+            post({
+                let state = Arc::clone(&state);
+                move |payload| api_tunnel_url(state, payload)
+            }),
+        )
         .layer(axum::extract::DefaultBodyLimit::disable());
 
     let config_bind = {
         let s = state.read().await;
-        s.config.supervisorr.as_ref().and_then(|sup| sup.web_bind.clone()).unwrap_or_else(|| "127.0.0.1:3000".to_string())
+        s.config
+            .supervisorr
+            .as_ref()
+            .and_then(|sup| sup.web_bind.clone())
+            .unwrap_or_else(|| "127.0.0.1:3000".to_string())
     };
 
-    let addr: SocketAddr = config_bind.parse().unwrap_or_else(|_| "127.0.0.1:3000".parse().unwrap());
+    let addr: SocketAddr = config_bind
+        .parse()
+        .unwrap_or_else(|_| "127.0.0.1:3000".parse().unwrap());
     println!("Web Dashboard listening on http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(&addr).await?;
@@ -58,18 +78,14 @@ pub async fn start_web(state: SharedState) -> anyhow::Result<()> {
 
 async fn index_handler() -> impl IntoResponse {
     match Asset::get("index.html") {
-        Some(file) => {
-            axum::response::Response::builder()
-                .header("content-type", "text/html; charset=utf-8")
-                .body(axum::body::Body::from(file.data))
-                .unwrap()
-        }
-        None => {
-            axum::response::Response::builder()
-                .status(404)
-                .body(axum::body::Body::from("UI not found"))
-                .unwrap()
-        }
+        Some(file) => axum::response::Response::builder()
+            .header("content-type", "text/html; charset=utf-8")
+            .body(axum::body::Body::from(file.data))
+            .unwrap(),
+        None => axum::response::Response::builder()
+            .status(404)
+            .body(axum::body::Body::from("UI not found"))
+            .unwrap(),
     }
 }
 
@@ -85,7 +101,9 @@ async fn api_status(state: SharedState) -> Json<Vec<ProcessStatusDto>> {
     let mut data = Vec::new();
     let s = state.read().await;
     for (name, ps) in &s.processes {
-        if name.starts_with("_tunnel_") { continue; }
+        if name.starts_with("_tunnel_") {
+            continue;
+        }
         let status_str = match &ps.status {
             Status::Stopped => "Stopped".to_string(),
             Status::Running(pid) => format!("Running (pid {})", pid),
@@ -96,10 +114,16 @@ async fn api_status(state: SharedState) -> Json<Vec<ProcessStatusDto>> {
             Intent::Run => "Run".to_string(),
             Intent::Stop => "Stop".to_string(),
         };
-        
-        let tunnel_domain = s.config.program.get(name).and_then(|p| p.tunnel.as_ref().map(|t| {
-            if t.is_quick { "Quick Tunnel (Check Logs)".to_string() } else { t.domain.clone() }
-        }));
+
+        let tunnel_domain = s.config.program.get(name).and_then(|p| {
+            p.tunnel.as_ref().map(|t| {
+                if t.is_quick {
+                    "Quick Tunnel (Check Logs)".to_string()
+                } else {
+                    t.domain.clone()
+                }
+            })
+        });
 
         data.push(ProcessStatusDto {
             name: name.clone(),
@@ -124,26 +148,51 @@ struct ActionResponse {
     error: Option<String>,
 }
 
-async fn api_action(state: SharedState, axum::Json(payload): axum::Json<ActionPayload>) -> Json<ActionResponse> {
-    let mut s = state.write().await;
-    let target = &payload.target;
-    
-    if let Some(ps) = s.processes.get_mut(target) {
+async fn api_action(
+    state: SharedState,
+    axum::Json(payload): axum::Json<ActionPayload>,
+) -> Json<ActionResponse> {
+    let pid = {
+        let mut s = state.write().await;
+        let target = &payload.target;
+        let Some(ps) = s.processes.get_mut(target) else {
+            return Json(ActionResponse {
+                success: false,
+                error: Some("Process not found".to_string()),
+            });
+        };
         if payload.action == "start" {
             ps.intent = Intent::Run;
-            Json(ActionResponse { success: true, error: None })
+            return Json(ActionResponse {
+                success: true,
+                error: None,
+            });
         } else if payload.action == "stop" {
             ps.intent = Intent::Stop;
-            if let Status::Running(pid) = ps.status {
-                let _ = nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid as i32), nix::sys::signal::Signal::SIGTERM);
+            match ps.status {
+                Status::Running(pid) => Some(pid),
+                _ => None,
             }
-            Json(ActionResponse { success: true, error: None })
         } else {
-            Json(ActionResponse { success: false, error: Some("Unknown action".to_string()) })
+            return Json(ActionResponse {
+                success: false,
+                error: Some("Unknown action".to_string()),
+            });
         }
-    } else {
-        Json(ActionResponse { success: false, error: Some("Process not found".to_string()) })
+    };
+
+    if let Some(pid) = pid
+        && let Err(error) = crate::platform::terminate_process_tree(pid).await
+    {
+        return Json(ActionResponse {
+            success: false,
+            error: Some(format!("Failed to stop process: {error}")),
+        });
     }
+    Json(ActionResponse {
+        success: true,
+        error: None,
+    })
 }
 
 #[derive(serde::Deserialize)]
@@ -154,30 +203,50 @@ struct TunnelPayload {
     port: Option<u16>,
 }
 async fn resolve_cloudflared() -> Result<String, String> {
+    let executable_name = if cfg!(windows) {
+        "cloudflared.exe"
+    } else {
+        "cloudflared"
+    };
+
     // Check common locations
-    for path in ["cloudflared", "/usr/local/bin/cloudflared", "/usr/bin/cloudflared"] {
-        let check = tokio::process::Command::new(path).arg("--version").output().await;
+    for path in [
+        executable_name,
+        "/usr/local/bin/cloudflared",
+        "/usr/bin/cloudflared",
+    ] {
+        let check = tokio::process::Command::new(path)
+            .arg("--version")
+            .output()
+            .await;
         if check.is_ok() && check.unwrap().status.success() {
             return Ok(path.to_string());
         }
     }
-    
-    // Check ~/.local/bin
+
+    // Check the per-user location.
     if let Some(home) = std::env::var_os("HOME") {
-        let local_path = format!("{}/.local/bin/cloudflared", home.to_string_lossy());
-        let check = tokio::process::Command::new(&local_path).arg("--version").output().await;
+        let local_path = if cfg!(windows) {
+            std::path::PathBuf::from(home).join("cloudflared.exe")
+        } else {
+            std::path::PathBuf::from(home).join(".local/bin/cloudflared")
+        };
+        let check = tokio::process::Command::new(&local_path)
+            .arg("--version")
+            .output()
+            .await;
         if check.is_ok() && check.unwrap().status.success() {
-            return Ok(local_path);
+            return Ok(local_path.to_string_lossy().into_owned());
         }
     }
-    
+
     // Check current directory
     let cwd = std::env::current_dir().unwrap_or_default();
-    let local_bin = cwd.join("cloudflared");
+    let local_bin = cwd.join(executable_name);
     if local_bin.exists() {
         return Ok(local_bin.to_string_lossy().to_string());
     }
-    
+
     // Auto-download
     let arch = std::env::consts::ARCH;
     let arch_suffix = match arch {
@@ -185,16 +254,29 @@ async fn resolve_cloudflared() -> Result<String, String> {
         "aarch64" => "arm64",
         _ => return Err(format!("Unsupported architecture: {}", arch)),
     };
-    let url = format!("https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-{}", arch_suffix);
+    let (platform, extension) = if cfg!(windows) {
+        ("windows", ".exe")
+    } else {
+        ("linux", "")
+    };
+    let url = format!(
+        "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-{platform}-{arch_suffix}.exe"
+    );
+    let url = if extension.is_empty() {
+        url.trim_end_matches(".exe").to_string()
+    } else {
+        url
+    };
     let dest = local_bin.to_string_lossy().to_string();
-    
+
     let download = tokio::process::Command::new("curl")
         .args(["-L", &url, "-o", &dest])
-        .output().await;
-    
+        .output()
+        .await;
+
     match download {
         Ok(out) if out.status.success() => {
-            let _ = tokio::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o755)).await;
+            let _ = crate::platform::make_executable(std::path::Path::new(&dest)).await;
             Ok(dest)
         }
         _ => Err("Failed to download cloudflared. Install it manually: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/".to_string()),
@@ -202,48 +284,74 @@ async fn resolve_cloudflared() -> Result<String, String> {
 }
 
 async fn detect_port(pid: u32) -> Option<u16> {
-    // Use ss to find listening ports for this specific PID
-    let output = tokio::process::Command::new("ss")
-        .args(["-tlnp"])
-        .output().await.ok()?;
-    
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let pid_str = format!("pid={}", pid);
-    
-    for line in stdout.lines() {
-        if line.contains(&pid_str) && line.contains("LISTEN") {
-            // Parse port from address column like "0.0.0.0:28019" or "*:8080"
-            for part in line.split_whitespace() {
-                if part.contains(':') && !part.contains("pid=") {
-                    if let Some(port_str) = part.rsplit(':').next() {
-                        if let Ok(port) = port_str.parse::<u16>() {
-                            return Some(port);
+    #[cfg(windows)]
+    {
+        let _ = pid;
+        None
+    }
+
+    #[cfg(unix)]
+    {
+        // Use ss to find listening ports for this specific PID
+        let output = tokio::process::Command::new("ss")
+            .args(["-tlnp"])
+            .output()
+            .await
+            .ok()?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let pid_str = format!("pid={}", pid);
+
+        for line in stdout.lines() {
+            if line.contains(&pid_str) && line.contains("LISTEN") {
+                // Parse port from address column like "0.0.0.0:28019" or "*:8080"
+                for part in line.split_whitespace() {
+                    if part.contains(':') && !part.contains("pid=") {
+                        if let Some(port_str) = part.rsplit(':').next() {
+                            if let Ok(port) = port_str.parse::<u16>() {
+                                return Some(port);
+                            }
                         }
                     }
                 }
             }
         }
+        None
     }
-    None
 }
 
-async fn api_tunnel(state: SharedState, axum::Json(payload): axum::Json<TunnelPayload>) -> Json<ActionResponse> {
+async fn api_tunnel(
+    state: SharedState,
+    axum::Json(payload): axum::Json<TunnelPayload>,
+) -> Json<ActionResponse> {
     let cloudflared = match resolve_cloudflared().await {
         Ok(path) => path,
-        Err(e) => return Json(ActionResponse { success: false, error: Some(e) }),
+        Err(e) => {
+            return Json(ActionResponse {
+                success: false,
+                error: Some(e),
+            });
+        }
     };
 
     let mut s = state.write().await;
     let target = &payload.target;
 
-    if s.processes.get(target).is_none() {
-        return Json(ActionResponse { success: false, error: Some("Process not found".to_string()) });
+    if !s.processes.contains_key(target) {
+        return Json(ActionResponse {
+            success: false,
+            error: Some("Process not found".to_string()),
+        });
     }
 
     if payload.action == "start" {
         let domain_str = payload.domain.unwrap_or_default();
         let is_quick = domain_str.trim().is_empty();
-        let domain_final = if is_quick { "quick".to_string() } else { domain_str.trim().to_string() };
+        let domain_final = if is_quick {
+            "quick".to_string()
+        } else {
+            domain_str.trim().to_string()
+        };
 
         // Auto-detect port from the running process
         let detected_port = if let Some(ps) = s.processes.get(target) {
@@ -265,13 +373,13 @@ async fn api_tunnel(state: SharedState, axum::Json(payload): axum::Json<TunnelPa
         if let Some(prog) = s.config.program.get_mut(target) {
             prog.tunnel = Some(t_config.clone());
         }
-        
+
         if let Ok(toml_str) = toml::to_string(&s.config) {
             let _ = tokio::fs::write(&s.config_path, toml_str).await;
         }
 
         drop(s);
-        
+
         let state_clone = state.clone();
         let target_clone = target.clone();
         let cf_bin = cloudflared.clone();
@@ -280,8 +388,14 @@ async fn api_tunnel(state: SharedState, axum::Json(payload): axum::Json<TunnelPa
             let command = if is_quick {
                 format!("{} tunnel --url http://127.0.0.1:{}", cf_bin, port_final)
             } else {
-                let _ = tokio::process::Command::new(&cf_bin).args(["tunnel", "create", &tunnel_prog_name]).output().await;
-                let _ = tokio::process::Command::new(&cf_bin).args(["tunnel", "route", "dns", &tunnel_prog_name, &domain_final]).output().await;
+                let _ = tokio::process::Command::new(&cf_bin)
+                    .args(["tunnel", "create", &tunnel_prog_name])
+                    .output()
+                    .await;
+                let _ = tokio::process::Command::new(&cf_bin)
+                    .args(["tunnel", "route", "dns", &tunnel_prog_name, &domain_final])
+                    .output()
+                    .await;
                 format!("{} tunnel run {}", cf_bin, tunnel_prog_name)
             };
 
@@ -298,16 +412,22 @@ async fn api_tunnel(state: SharedState, axum::Json(payload): axum::Json<TunnelPa
 
             {
                 let mut ss = state_clone.write().await;
-                ss.processes.insert(tunnel_prog_name.clone(), ProcessState {
-                    intent: Intent::Run,
-                    status: Status::Stopped,
-                });
+                ss.processes.insert(
+                    tunnel_prog_name.clone(),
+                    ProcessState {
+                        intent: Intent::Run,
+                        status: Status::Stopped,
+                    },
+                );
             }
 
             crate::daemon::supervise_program(tunnel_prog_name, new_prog, state_clone).await;
         });
 
-        Json(ActionResponse { success: true, error: None })
+        Json(ActionResponse {
+            success: true,
+            error: None,
+        })
     } else if payload.action == "stop" {
         if let Some(prog) = s.config.program.get_mut(target) {
             prog.tunnel = None;
@@ -317,15 +437,33 @@ async fn api_tunnel(state: SharedState, axum::Json(payload): axum::Json<TunnelPa
         }
 
         let tunnel_prog_name = format!("_tunnel_{}", target);
-        if let Some(ps) = s.processes.get_mut(&tunnel_prog_name) {
+        let pid = if let Some(ps) = s.processes.get_mut(&tunnel_prog_name) {
             ps.intent = Intent::Stop;
-            if let Status::Running(pid) = ps.status {
-                let _ = nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid as i32), nix::sys::signal::Signal::SIGTERM);
+            match ps.status {
+                Status::Running(pid) => Some(pid),
+                _ => None,
             }
+        } else {
+            None
+        };
+        drop(s);
+        if let Some(pid) = pid
+            && let Err(error) = crate::platform::terminate_process_tree(pid).await
+        {
+            return Json(ActionResponse {
+                success: false,
+                error: Some(format!("Failed to stop tunnel: {error}")),
+            });
         }
-        Json(ActionResponse { success: true, error: None })
+        Json(ActionResponse {
+            success: true,
+            error: None,
+        })
     } else {
-        Json(ActionResponse { success: false, error: Some("Unknown action".to_string()) })
+        Json(ActionResponse {
+            success: false,
+            error: Some("Unknown action".to_string()),
+        })
     }
 }
 
@@ -339,10 +477,13 @@ struct TunnelUrlResponse {
     url: Option<String>,
 }
 
-async fn api_tunnel_url(_state: SharedState, axum::Json(payload): axum::Json<TunnelUrlPayload>) -> Json<TunnelUrlResponse> {
+async fn api_tunnel_url(
+    _state: SharedState,
+    axum::Json(payload): axum::Json<TunnelUrlPayload>,
+) -> Json<TunnelUrlResponse> {
     let err_path = format!("_tunnel_{}.err", payload.target);
     let log_path = format!("_tunnel_{}.log", payload.target);
-    
+
     // cloudflared prints the URL to stderr typically, but check both
     for path in [&err_path, &log_path] {
         if let Ok(contents) = tokio::fs::read_to_string(path).await {
@@ -351,7 +492,9 @@ async fn api_tunnel_url(_state: SharedState, axum::Json(payload): axum::Json<Tun
                     // Extract URL from the line
                     for word in line.split_whitespace() {
                         if word.starts_with("https://") {
-                            return Json(TunnelUrlResponse { url: Some(word.trim().to_string()) });
+                            return Json(TunnelUrlResponse {
+                                url: Some(word.trim().to_string()),
+                            });
                         }
                     }
                 }
@@ -369,23 +512,27 @@ async fn api_upload(state: SharedState, mut multipart: Multipart) -> Json<Action
                 raw_name = clean.to_string_lossy().to_string();
             }
             let file_name = raw_name;
-            
+
             let data = match field.bytes().await {
                 Ok(b) => b,
-                Err(e) => return Json(ActionResponse { success: false, error: Some(e.to_string()) }),
+                Err(e) => {
+                    return Json(ActionResponse {
+                        success: false,
+                        error: Some(e.to_string()),
+                    });
+                }
             };
-            
+
             let current_dir = std::env::current_dir().unwrap_or_default();
             let path = current_dir.join(&file_name);
             if let Err(e) = fs::write(&path, data).await {
-                return Json(ActionResponse { success: false, error: Some(format!("Failed to save: {}", e)) });
+                return Json(ActionResponse {
+                    success: false,
+                    error: Some(format!("Failed to save: {}", e)),
+                });
             }
-            
-            if let Ok(metadata) = fs::metadata(&path).await {
-                let mut perms = metadata.permissions();
-                perms.set_mode(0o755);
-                let _ = fs::set_permissions(&path, perms).await;
-            }
+
+            let _ = crate::platform::make_executable(&path).await;
 
             let new_prog = ProgramConfig {
                 command: path.to_string_lossy().to_string(),
@@ -393,8 +540,18 @@ async fn api_upload(state: SharedState, mut multipart: Multipart) -> Json<Action
                 autostart: true,
                 autorestart: true,
                 environment: None,
-                stdout_logfile: Some(current_dir.join(format!("{}.log", file_name)).to_string_lossy().to_string()),
-                stderr_logfile: Some(current_dir.join(format!("{}.err", file_name)).to_string_lossy().to_string()),
+                stdout_logfile: Some(
+                    current_dir
+                        .join(format!("{}.log", file_name))
+                        .to_string_lossy()
+                        .to_string(),
+                ),
+                stderr_logfile: Some(
+                    current_dir
+                        .join(format!("{}.err", file_name))
+                        .to_string_lossy()
+                        .to_string(),
+                ),
                 tunnel: None,
             };
 
@@ -404,10 +561,13 @@ async fn api_upload(state: SharedState, mut multipart: Multipart) -> Json<Action
                 if let Ok(toml_str) = toml::to_string(&s.config) {
                     let _ = fs::write(&s.config_path, toml_str).await;
                 }
-                s.processes.insert(file_name.clone(), ProcessState {
-                    intent: Intent::Run,
-                    status: Status::Stopped,
-                });
+                s.processes.insert(
+                    file_name.clone(),
+                    ProcessState {
+                        intent: Intent::Run,
+                        status: Status::Stopped,
+                    },
+                );
             }
 
             let state_clone = state.clone();
@@ -415,8 +575,14 @@ async fn api_upload(state: SharedState, mut multipart: Multipart) -> Json<Action
                 crate::daemon::supervise_program(file_name, new_prog, state_clone).await;
             });
 
-            return Json(ActionResponse { success: true, error: None });
+            return Json(ActionResponse {
+                success: true,
+                error: None,
+            });
         }
     }
-    Json(ActionResponse { success: false, error: Some("No executable found".to_string()) })
+    Json(ActionResponse {
+        success: false,
+        error: Some("No executable found".to_string()),
+    })
 }

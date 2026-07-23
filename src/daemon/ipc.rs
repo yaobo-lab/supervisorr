@@ -1,12 +1,6 @@
-use crate::daemon::state::{SharedState, Intent, Status};
-use tokio::net::{UnixListener, UnixStream};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use crate::daemon::state::{Intent, SharedState, Status};
 use serde::{Deserialize, Serialize};
-use std::fs;
-use nix::sys::signal::{kill, Signal};
-use nix::unistd::Pid;
-use std::sync::Arc;
-use std::os::unix::fs::PermissionsExt;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum IpcRequest {
@@ -22,100 +16,137 @@ pub enum IpcResponse {
     Error(String),
 }
 
-pub async fn setup_ipc(socket_path: &str, state: SharedState) -> anyhow::Result<()> {
-    if fs::metadata(socket_path).is_ok() {
-        fs::remove_file(socket_path)?;
+#[cfg(unix)]
+pub async fn setup_ipc(endpoint: &str, state: SharedState) -> anyhow::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    use std::sync::Arc;
+    use tokio::net::UnixListener;
+
+    if std::fs::metadata(endpoint).is_ok() {
+        std::fs::remove_file(endpoint)?;
     }
 
-    let listener = UnixListener::bind(socket_path)?;
-    if let Ok(metadata) = fs::metadata(socket_path) {
-        let mut perms = metadata.permissions();
-        perms.set_mode(0o600);
-        let _ = fs::set_permissions(socket_path, perms);
+    let listener = UnixListener::bind(endpoint)?;
+    if let Ok(metadata) = std::fs::metadata(endpoint) {
+        let mut permissions = metadata.permissions();
+        permissions.set_mode(0o600);
+        std::fs::set_permissions(endpoint, permissions)?;
     }
-    
-    println!("IPC Server listening on {}", socket_path);
+    println!("IPC server listening on {endpoint}");
 
     loop {
-        match listener.accept().await {
-            Ok((stream, _addr)) => {
-                let state_clone = Arc::clone(&state);
-                tokio::spawn(async move {
-                    if let Err(e) = handle_client(stream, state_clone).await {
-                        eprintln!("Error handling client: {}", e);
-                    }
-                });
+        let (stream, _) = listener.accept().await?;
+        let state = Arc::clone(&state);
+        tokio::spawn(async move {
+            if let Err(error) = handle_client(stream, state).await {
+                eprintln!("Error handling IPC client: {error}");
             }
-            Err(e) => {
-                eprintln!("Failed to accept incoming IPC connection: {}", e);
+        });
+    }
+}
+
+#[cfg(windows)]
+pub async fn setup_ipc(endpoint: &str, state: SharedState) -> anyhow::Result<()> {
+    use std::sync::Arc;
+    use tokio::net::windows::named_pipe::ServerOptions;
+
+    println!("IPC server listening on {endpoint}");
+    loop {
+        let server = ServerOptions::new().create(endpoint)?;
+        server.connect().await?;
+        let state = Arc::clone(&state);
+        tokio::spawn(async move {
+            if let Err(error) = handle_client(server, state).await {
+                eprintln!("Error handling IPC client: {error}");
+            }
+        });
+    }
+}
+
+async fn handle_client<S>(mut stream: S, state: SharedState) -> anyhow::Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    let mut buffer = Vec::new();
+    let mut chunk = [0_u8; 4096];
+    loop {
+        let count = stream.read(&mut chunk).await?;
+        if count == 0 {
+            return Ok(());
+        }
+        buffer.extend_from_slice(&chunk[..count]);
+        match serde_json::from_slice::<IpcRequest>(&buffer) {
+            Ok(request) => {
+                let response = process_request(request, state).await;
+                stream.write_all(&serde_json::to_vec(&response)?).await?;
+                stream.shutdown().await?;
+                return Ok(());
+            }
+            Err(error) if error.is_eof() => continue,
+            Err(error) => {
+                let response = IpcResponse::Error(format!("Invalid request: {error}"));
+                stream.write_all(&serde_json::to_vec(&response)?).await?;
+                stream.shutdown().await?;
+                return Ok(());
             }
         }
     }
 }
 
-async fn handle_client(mut stream: UnixStream, state: SharedState) -> anyhow::Result<()> {
-    let mut buf = vec![0; 4096];
-    let n = stream.read(&mut buf).await?;
-    if n == 0 { return Ok(()); }
-
-    let req: IpcRequest = match serde_json::from_slice(&buf[..n]) {
-        Ok(r) => r,
-        Err(e) => {
-            let res = IpcResponse::Error(format!("Invalid request: {}", e));
-            let data = serde_json::to_vec(&res)?;
-            stream.write_all(&data).await?;
-            return Ok(());
-        }
-    };
-
-    let response = process_request(req, state).await;
-    let data = serde_json::to_vec(&response)?;
-    stream.write_all(&data).await?;
-    
-    Ok(())
-}
-
-async fn process_request(req: IpcRequest, state: SharedState) -> IpcResponse {
-    match req {
+async fn process_request(request: IpcRequest, state: SharedState) -> IpcResponse {
+    match request {
         IpcRequest::Status => {
-            let mut data = std::collections::HashMap::new();
-            let s = state.read().await;
-            for (name, ps) in &s.processes {
-                let status_str = match &ps.status {
-                    Status::Stopped => "STOPPED".to_string(),
-                    Status::Running(pid) => format!("RUNNING (pid {})", pid),
-                    Status::Exited(c) => format!("EXITED (code {})", c),
-                    Status::Failed(e) => format!("FAILED ({})", e),
-                };
-                let intent_str = match ps.intent {
-                    Intent::Run => "intended: RUN",
-                    Intent::Stop => "intended: STOP",
-                };
-                data.insert(name.clone(), format!("{} [{}]", status_str, intent_str));
-            }
+            let state = state.read().await;
+            let data = state
+                .processes
+                .iter()
+                .map(|(name, process)| {
+                    let status = match &process.status {
+                        Status::Stopped => "STOPPED".to_string(),
+                        Status::Running(pid) => format!("RUNNING (pid {pid})"),
+                        Status::Exited(code) => format!("EXITED (code {code})"),
+                        Status::Failed(error) => format!("FAILED ({error})"),
+                    };
+                    let intent = match process.intent {
+                        Intent::Run => "intended: RUN",
+                        Intent::Stop => "intended: STOP",
+                    };
+                    (name.clone(), format!("{status} [{intent}]"))
+                })
+                .collect();
             IpcResponse::StatusData(data)
         }
         IpcRequest::Start { target } => {
-            let mut s = state.write().await;
-            if let Some(ps) = s.processes.get_mut(&target) {
-                ps.intent = Intent::Run;
-                IpcResponse::Ok
-            } else {
-                IpcResponse::Error("Process not found".to_string())
+            let mut state = state.write().await;
+            match state.processes.get_mut(&target) {
+                Some(process) => {
+                    process.intent = Intent::Run;
+                    IpcResponse::Ok
+                }
+                None => IpcResponse::Error("Process not found".to_string()),
             }
         }
         IpcRequest::Stop { target } => {
-            let mut s = state.write().await;
-            if let Some(ps) = s.processes.get_mut(&target) {
-                ps.intent = Intent::Stop;
-                if let Status::Running(pid) = ps.status {
-                    // Send SIGTERM
-                    let _ = kill(Pid::from_raw(pid as i32), Signal::SIGTERM);
+            let pid = {
+                let mut state = state.write().await;
+                match state.processes.get_mut(&target) {
+                    Some(process) => {
+                        process.intent = Intent::Stop;
+                        match process.status {
+                            Status::Running(pid) => Some(pid),
+                            _ => None,
+                        }
+                    }
+                    None => return IpcResponse::Error("Process not found".to_string()),
                 }
-                IpcResponse::Ok
-            } else {
-                IpcResponse::Error("Process not found".to_string())
+            };
+
+            if let Some(pid) = pid
+                && let Err(error) = crate::platform::terminate_process_tree(pid).await
+            {
+                return IpcResponse::Error(format!("Failed to stop process: {error}"));
             }
+            IpcResponse::Ok
         }
     }
 }
