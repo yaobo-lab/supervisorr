@@ -90,6 +90,57 @@ pub async fn make_executable(path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(windows)]
+pub fn process_memory_bytes(pid: u32) -> Option<u64> {
+    use std::mem::{size_of, zeroed};
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::ProcessStatus::{
+        K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
+    };
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ,
+    };
+
+    // SAFETY: the process handle is checked before use, the counters buffer has
+    // the exact size expected by K32GetProcessMemoryInfo, and the handle is
+    // always closed before returning.
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, pid);
+        if handle.is_null() {
+            return None;
+        }
+
+        let mut counters: PROCESS_MEMORY_COUNTERS = zeroed();
+        counters.cb = size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
+        let success = K32GetProcessMemoryInfo(
+            handle,
+            &mut counters,
+            size_of::<PROCESS_MEMORY_COUNTERS>() as u32,
+        );
+        CloseHandle(handle);
+
+        (success != 0).then_some(counters.WorkingSetSize as u64)
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub fn process_memory_bytes(pid: u32) -> Option<u64> {
+    let status = std::fs::read_to_string(format!("/proc/{pid}/status")).ok()?;
+    parse_linux_vm_rss(&status)
+}
+
+#[cfg(all(unix, not(target_os = "linux")))]
+pub fn process_memory_bytes(_pid: u32) -> Option<u64> {
+    None
+}
+
+#[cfg(target_os = "linux")]
+fn parse_linux_vm_rss(status: &str) -> Option<u64> {
+    let line = status.lines().find(|line| line.starts_with("VmRSS:"))?;
+    let kibibytes = line.split_whitespace().nth(1)?.parse::<u64>().ok()?;
+    kibibytes.checked_mul(1024)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -106,6 +157,21 @@ mod tests {
         assert_eq!(
             normalize_ipc_endpoint(r"\\.\pipe\custom"),
             r"\\.\pipe\custom"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn reads_current_process_memory_on_windows() {
+        assert!(process_memory_bytes(std::process::id()).is_some_and(|bytes| bytes > 0));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn parses_linux_resident_memory() {
+        assert_eq!(
+            parse_linux_vm_rss("Name:\ttest\nVmRSS:\t  1234 kB\n"),
+            Some(1_263_616)
         );
     }
 }

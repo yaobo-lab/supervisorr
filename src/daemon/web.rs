@@ -94,6 +94,7 @@ struct ProcessStatusDto {
     name: String,
     status: String,
     intent: String,
+    memory_bytes: Option<u64>,
     tunnel_domain: Option<String>,
 }
 
@@ -109,6 +110,10 @@ async fn api_status(state: SharedState) -> Json<Vec<ProcessStatusDto>> {
             Status::Running(pid) => format!("Running (pid {})", pid),
             Status::Exited(c) => format!("Exited (code {})", c),
             Status::Failed(e) => format!("Failed: {}", e),
+        };
+        let memory_bytes = match ps.status {
+            Status::Running(pid) => crate::platform::process_memory_bytes(pid),
+            _ => None,
         };
         let intent_str = match ps.intent {
             Intent::Run => "Run".to_string(),
@@ -129,6 +134,7 @@ async fn api_status(state: SharedState) -> Json<Vec<ProcessStatusDto>> {
             name: name.clone(),
             status: status_str,
             intent: intent_str,
+            memory_bytes,
             tunnel_domain,
         });
     }
