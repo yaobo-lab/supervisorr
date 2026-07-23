@@ -14,7 +14,7 @@ use toolkit_rs::AppResult;
 #[folder = "static/"]
 struct Asset;
 
-pub async fn start_web(state: SharedState) -> AppResult {
+pub async fn start(state: SharedState) -> AppResult {
     let app = Router::new()
         .route("/", get(index_handler))
         .route(

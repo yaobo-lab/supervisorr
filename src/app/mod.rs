@@ -56,7 +56,7 @@ pub async fn run(config_dir: &str) -> AppResult {
     {
         let state_clone_web = Arc::clone(&state);
         tokio::spawn(async move {
-            if let Err(e) = crate::web::start_web(state_clone_web).await {
+            if let Err(e) = crate::web::start(state_clone_web).await {
                 eprintln!("Web server failed: {}", e);
             }
         });
