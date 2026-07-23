@@ -1,9 +1,5 @@
-mod client;
-mod config;
-mod daemon;
-mod platform;
-
 use clap::{Parser, Subcommand};
+use supervisorr::{client, daemon};
 
 #[derive(Parser)]
 #[command(name = "supervisorr")]

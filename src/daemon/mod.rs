@@ -1,6 +1,5 @@
 pub mod ipc;
 pub mod state;
-pub mod web;
 
 use crate::config::ProgramConfig;
 use state::{AppState, Intent, ProcessState, SharedState, Status};
@@ -59,12 +58,15 @@ pub async fn run(config_dir: &str) -> anyhow::Result<()> {
         }
     });
 
-    let state_clone_web = Arc::clone(&state);
-    tokio::spawn(async move {
-        if let Err(e) = web::start_web(state_clone_web).await {
-            eprintln!("Web server failed: {}", e);
-        }
-    });
+    #[cfg(feature = "web")]
+    {
+        let state_clone_web = Arc::clone(&state);
+        tokio::spawn(async move {
+            if let Err(e) = crate::web::start_web(state_clone_web).await {
+                eprintln!("Web server failed: {}", e);
+            }
+        });
+    }
 
     wait_for_shutdown().await?;
 

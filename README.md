@@ -50,6 +50,13 @@ Start the Daemon using that directory:
 ./supervisorr daemon -c ./etc
 ```
 
+The Web dashboard is enabled by default. To build a smaller daemon without the
+Web server and embedded static files:
+
+```bash
+cargo build --release --no-default-features
+```
+
 On Windows, run `supervisorr.exe daemon -c .\etc`. Program commands
 are executed through `cmd.exe`; Unix uses `sh`. To connect the CLI to a custom
 IPC endpoint, set `SUPERVISORR_IPC` to the configured socket path or named-pipe

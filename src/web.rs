@@ -13,7 +13,7 @@ use std::sync::Arc;
 use tokio::fs;
 
 #[derive(Embed)]
-#[folder = "src/web/"]
+#[folder = "static/"]
 struct Asset;
 
 pub async fn start_web(state: SharedState) -> anyhow::Result<()> {
