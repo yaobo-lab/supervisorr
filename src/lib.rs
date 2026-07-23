@@ -1,6 +1,6 @@
+pub mod app;
 pub mod client;
 pub mod config;
-pub mod daemon;
 pub mod platform;
 #[cfg(feature = "web")]
 pub mod web;
@@ -40,7 +40,7 @@ pub enum Commands {
     Stop { target: String },
 }
 
-pub async fn run_cli() -> anyhow::Result<()> {
+pub async fn cli() -> anyhow::Result<()> {
     set_panic_handler(PaincConf {
         version: "1.0.0".into(),
         build_time: "".into(),
@@ -103,7 +103,7 @@ web.listen_addr = "127.0.0.1"
             );
             Ok(())
         }
-        Commands::Daemon { config } => daemon::run(&config).await,
+        Commands::Daemon { config } => app::run(&config).await,
         Commands::Status => client::status().await,
         Commands::Start { target } => client::start(&target).await,
         Commands::Stop { target } => client::stop(&target).await,

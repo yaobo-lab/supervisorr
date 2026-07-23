@@ -1,5 +1,5 @@
+use crate::app::state::{Intent, ProcessState, SharedState, Status};
 use crate::config::ProgramConfig;
-use crate::daemon::state::{Intent, ProcessState, SharedState, Status};
 use axum::extract::Multipart;
 use axum::{
     Router,
@@ -445,7 +445,7 @@ async fn api_tunnel(
                 );
             }
 
-            crate::daemon::supervise_program(tunnel_prog_name, new_prog, state_clone).await;
+            crate::app::supervise_program(tunnel_prog_name, new_prog, state_clone).await;
         });
 
         Json(ActionResponse {
@@ -620,7 +620,7 @@ async fn api_upload(state: SharedState, mut multipart: Multipart) -> Json<Action
 
             let state_clone = state.clone();
             tokio::spawn(async move {
-                crate::daemon::supervise_program(file_name, new_prog, state_clone).await;
+                crate::app::supervise_program(file_name, new_prog, state_clone).await;
             });
 
             return Json(ActionResponse {

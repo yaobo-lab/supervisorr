@@ -1,4 +1,4 @@
-use crate::daemon::ipc::{IpcRequest, IpcResponse};
+use crate::app::ipc::{IpcRequest, IpcResponse};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 async fn exchange<S>(mut stream: S, request: IpcRequest) -> anyhow::Result<IpcResponse>

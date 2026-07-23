@@ -1,4 +1,4 @@
-use crate::daemon::state::{Intent, SharedState, Status};
+use crate::app::state::{Intent, SharedState, Status};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
