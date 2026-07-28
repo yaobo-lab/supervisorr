@@ -77,7 +77,7 @@ where
         buffer.extend_from_slice(&chunk[..count]);
         match serde_json::from_slice::<IpcRequest>(&buffer) {
             Ok(request) => {
-                let response = process_request(request, state).await;
+                let response = process(request, state).await;
                 stream.write_all(&serde_json::to_vec(&response)?).await?;
                 stream.shutdown().await?;
                 return Ok(());
@@ -93,7 +93,7 @@ where
     }
 }
 
-async fn process_request(request: IpcRequest, state: SharedState) -> IpcResponse {
+async fn process(request: IpcRequest, state: SharedState) -> IpcResponse {
     match request {
         IpcRequest::Status => {
             let state = state.read().await;
