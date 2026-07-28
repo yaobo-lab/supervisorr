@@ -11,9 +11,12 @@ pub enum Intent {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Status {
     Stopped,
-    Running(u32),   // pid
-    Exited(i32),    // exit code
-    Failed(String), // e.g. command not found
+    // pid
+    Running(u32),
+    // exit code
+    Exited(i32),
+    // e.g. command not found
+    Failed(String),
 }
 
 #[derive(Debug, Clone)]

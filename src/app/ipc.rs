@@ -142,7 +142,7 @@ async fn process_request(request: IpcRequest, state: SharedState) -> IpcResponse
             };
 
             if let Some(pid) = pid
-                && let Err(error) = crate::platform::terminate_process_tree(pid).await
+                && let Err(error) = crate::platform::kill_process(pid).await
             {
                 return IpcResponse::Error(format!("Failed to stop process: {error}"));
             }

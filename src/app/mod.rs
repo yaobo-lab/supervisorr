@@ -21,12 +21,14 @@ pub async fn run(config_dir: &str) -> AppResult {
 
     let state = Arc::new(RwLock::new(AppState::new(config.clone())));
 
-    for (name, prog_config) in config.program.into_iter() {
-        let intent = if prog_config.autostart {
+    for (name, cfg) in config.program.into_iter() {
+        //初始化时，希望程序运行状态
+        let intent = if cfg.autostart {
             Intent::Run
         } else {
             Intent::Stop
         };
+
         state.write().await.processes.insert(
             name.clone(),
             ProcessState {
@@ -37,7 +39,7 @@ pub async fn run(config_dir: &str) -> AppResult {
 
         let state_clone = Arc::clone(&state);
         tokio::spawn(async move {
-            supervisord_app(name, prog_config, state_clone).await;
+            supervisord_app(name, cfg, state_clone).await;
         });
     }
 
@@ -73,6 +75,11 @@ pub async fn run(config_dir: &str) -> AppResult {
     Ok(())
 }
 
+/*
+1:初始化子进程 启用命令、工作目录、日志输打印目录、环境变量
+2：启动子进程，等待子进程退出
+3：判断子进程, 是否需要重新拉起,不需要即等待手动拉起
+*/
 async fn supervisord_app(name: String, config: ProgramConfig, state: SharedState) {
     loop {
         let intent = {
@@ -119,6 +126,8 @@ async fn supervisord_app(name: String, config: ProgramConfig, state: SharedState
         match cmd.spawn() {
             Ok(mut child) => {
                 let pid = child.id().unwrap_or(0);
+
+                //
                 {
                     let mut s = state.write().await;
                     if let Some(ps) = s.processes.get_mut(&name) {
@@ -164,6 +173,7 @@ async fn supervisord_app(name: String, config: ProgramConfig, state: SharedState
             }
         }
 
+        //子进程序退出后，等待下一次手动重启
         if intent == Intent::Stop || !config.autorestart {
             while {
                 let s = state.read().await;
@@ -176,6 +186,7 @@ async fn supervisord_app(name: String, config: ProgramConfig, state: SharedState
                 tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
             }
         } else {
+            //子进程需要重新拉起
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         }
     }
@@ -198,7 +209,7 @@ async fn shutdown_processes(state: &SharedState) {
     };
 
     for pid in pids {
-        if let Err(error) = crate::platform::terminate_process_tree(pid).await {
+        if let Err(error) = crate::platform::kill_process(pid).await {
             eprintln!("Failed to stop child process {pid}: {error}");
         }
     }

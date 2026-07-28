@@ -157,7 +157,7 @@ async fn api_action(
     };
 
     if let Some(pid) = pid
-        && let Err(error) = crate::platform::terminate_process_tree(pid).await
+        && let Err(error) = crate::platform::kill_process(pid).await
     {
         return Json(ActionResponse {
             success: false,

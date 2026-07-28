@@ -5,6 +5,9 @@ pub mod platform;
 #[cfg(feature = "web")]
 pub mod web;
 
+#[cfg(windows)]
+mod windows;
+
 use clap::{Parser, Subcommand};
 use std::process;
 use toolkit_rs::{AppResult, logger};
@@ -24,6 +27,8 @@ pub enum Commands {
         #[arg(short, long, default_value = "./etc")]
         config: String,
     },
+    // Install as a service
+    Install {},
     /// Starts the supervisor daemon
     Daemon {
         #[arg(short, long, default_value = "./etc")]
@@ -32,9 +37,13 @@ pub enum Commands {
     /// Status of processes
     Status,
     /// Start a process
-    Start { target: String },
+    Start {
+        target: String,
+    },
     /// Stop a process
-    Stop { target: String },
+    Stop {
+        target: String,
+    },
 }
 
 pub async fn cli() -> AppResult {
@@ -97,6 +106,7 @@ web.listen_addr = "127.0.0.1"
 pub async fn command(cmd: Commands) -> AppResult {
     match cmd {
         Commands::Init { config } => init(&config),
+        Commands::Install {} => Ok(()),
         Commands::Daemon { config } => app::run(&config).await,
         Commands::Status => client::status().await,
         Commands::Start { target } => client::start(&target).await,

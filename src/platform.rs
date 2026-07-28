@@ -47,12 +47,11 @@ pub fn command(command_line: &str) -> Command {
     }
 }
 
-pub async fn terminate_process_tree(pid: u32) -> AppResult {
+pub async fn kill_process(pid: u32) -> AppResult {
     #[cfg(unix)]
     {
         use nix::sys::signal::{Signal, kill};
         use nix::unistd::Pid;
-
         kill(Pid::from_raw(pid as i32), Signal::SIGTERM)?;
     }
 

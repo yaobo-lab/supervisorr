@@ -56,6 +56,10 @@ pub fn load_basic(path: &str) -> Config {
     })
 }
 
+pub fn default_config_path() -> &'static str {
+    "./etc"
+}
+
 pub fn load_directory(path: &Path) -> AppResult<Config> {
     if !path.is_dir() {
         anyhow::bail!("Configuration path is not a directory: {}", path.display());
