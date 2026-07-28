@@ -7,7 +7,18 @@
 
 #![allow(dead_code)]
 use anyhow::anyhow;
+use encoding_rs::GBK;
 use toolkit_rs::AppResult;
+
+fn decode_windows_output(bytes: &[u8]) -> String {
+    match std::str::from_utf8(bytes) {
+        Ok(text) => text.to_owned(),
+        Err(_) => {
+            let (text, _, _) = GBK.decode(bytes);
+            text.into_owned()
+        }
+    }
+}
 
 fn install_default_dir(service_name: &str) -> std::path::PathBuf {
     std::path::PathBuf::from(
@@ -73,7 +84,7 @@ fn exe_powershell(script: &str, what: &str) -> AppResult {
         return Err(anyhow!(
             "{} failed: {}",
             what,
-            String::from_utf8_lossy(&out.stderr).trim()
+            decode_windows_output(&out.stderr).trim()
         ));
     }
     Ok(())
@@ -158,9 +169,8 @@ fn copy_service_file(
     Ok(dst)
 }
 
-fn remove_service_dir(service_name: &str) -> AppResult {
-    std::fs::remove_dir_all(install_default_dir(service_name))?;
-    Ok(())
+fn remove_service_dir(service_name: &str) {
+    let _ = std::fs::remove_dir_all(install_default_dir(service_name));
 }
 
 //sc.exe create supervisord binPath= "C:\ProgramData\supervisord.exe --service"
@@ -180,7 +190,7 @@ fn register_service(exe: &std::path::Path, service_name: &str) -> AppResult {
         "LocalSystem",
     ])?;
     if !create.status.success() {
-        let out = String::from_utf8_lossy(&create.stdout);
+        let out = decode_windows_output(&create.stdout);
         // "service already exists" is 1073 — treat as idempotent success.
         if !out.contains("1073") {
             return Err(anyhow!("sc create failed: {}", out.trim()));
@@ -210,7 +220,7 @@ fn start_service(service_name: &str) -> AppResult {
     //sc.exe start supervisord
     let out = exe_sc(&["start", service_name])?;
     if !out.status.success() {
-        let text = String::from_utf8_lossy(&out.stdout);
+        let text = decode_windows_output(&out.stdout);
         // already running
         if text.contains("1056") {
             return Ok(());
@@ -226,7 +236,7 @@ fn stop_service(service_name: &str) {
     // binary file handle is released before we try to overwrite it.
     for _ in 0..20 {
         if let Ok(out) = exe_sc(&["query", service_name]) {
-            let text = String::from_utf8_lossy(&out.stdout);
+            let text = decode_windows_output(&out.stdout);
             if text.contains("STOPPED") || text.contains("1060") {
                 return;
             }
@@ -244,7 +254,7 @@ fn delete_service(service_name: &str) {
 
 fn service_status(service_name: &str) -> AppResult {
     let out = exe_sc(&["query", service_name])?;
-    let text = String::from_utf8_lossy(&out.stdout);
+    let text = decode_windows_output(&out.stdout);
     let display = parse_sc_state(&text);
     log::error!("{}\n", display);
     Ok(())
@@ -252,7 +262,10 @@ fn service_status(service_name: &str) -> AppResult {
 
 fn is_registered(service_name: &str) -> bool {
     exe_sc(&["query", service_name])
-        .map(|o| parse_sc_registered(o.status.success(), &String::from_utf8_lossy(&o.stdout)))
+        .map(|o| {
+            let stdout = decode_windows_output(&o.stdout);
+            parse_sc_registered(o.status.success(), &stdout)
+        })
         .unwrap_or(false)
 }
 
@@ -316,7 +329,7 @@ impl Install {
         let service_name = self.get_service_name();
         stop_service(service_name);
         delete_service(service_name);
-        remove_service_dir(service_name)?;
+        remove_service_dir(service_name);
         log::info!("uninstalled");
         Ok(())
     }

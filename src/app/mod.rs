@@ -9,6 +9,8 @@ use tokio::sync::RwLock;
 use toolkit_rs::AppResult;
 
 pub async fn run(config_dir: &str) -> AppResult {
+    log::info!("1.-----------------");
+
     let config_dir_path = std::path::Path::new(config_dir);
     if !config_dir_path.is_dir() {
         log::error!("Configuration directory not found at: {}", config_dir);

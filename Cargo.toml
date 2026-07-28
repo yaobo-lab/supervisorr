@@ -20,6 +20,7 @@ toolkit-rs = "1.0.31"
 nix = { version = "0.31.2", features = ["signal", "process"] }
 
 [target.'cfg(windows)'.dependencies]
+encoding_rs = "0.8.35"
 windows-sys = { version = "0.61.2", features = [
     "Win32_Foundation",
     "Win32_System_ProcessStatus",
