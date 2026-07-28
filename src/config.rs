@@ -60,6 +60,18 @@ pub fn default_config_path() -> &'static str {
     "./etc"
 }
 
+pub fn resolve_config_path(path: &str) -> std::path::PathBuf {
+    let path = Path::new(path);
+    if path == Path::new(default_config_path()) {
+        return std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(|parent| parent.join("etc")))
+            .unwrap_or_else(|| path.to_path_buf());
+    }
+
+    path.to_path_buf()
+}
+
 pub fn load_directory(path: &Path) -> AppResult<Config> {
     if !path.is_dir() {
         anyhow::bail!("Configuration path is not a directory: {}", path.display());

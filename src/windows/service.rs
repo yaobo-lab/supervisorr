@@ -61,10 +61,7 @@ fn run_service(service_name: &str) -> windows_service::Result<()> {
         process_id: None,
     })?;
 
-    let config_path = std::env::current_exe()
-        .ok()
-        .and_then(|path| path.parent().map(|parent| parent.join("etc")))
-        .unwrap_or_else(|| std::path::PathBuf::from(crate::config::default_config_path()));
+    let config_path = crate::config::resolve_config_path(crate::config::default_config_path());
     let (server_done_tx, server_done_rx) = mpsc::channel::<()>();
 
     let server_thread = std::thread::spawn(move || {
