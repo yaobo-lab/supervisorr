@@ -15,7 +15,7 @@ use toolkit_rs::{AppResult, logger};
 
 #[derive(Parser)]
 #[command(name = "supervisord")]
-#[command(about = "A zero-dependency process manager", long_about = None)]
+#[command(about = "\n A simple and easy-to-use daemon that supports Linux and Windows \n", long_about = None)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
@@ -28,8 +28,10 @@ pub enum Commands {
         #[arg(short, long, default_value = "./etc")]
         config: String,
     },
-    // Install as a service
+    ///  Install as a service
     Install {},
+    ///  Uninstall as a service
+    Uninstall {},
     /// Starts the supervisor daemon
     Daemon {
         #[arg(short, long, default_value = "./etc")]
@@ -38,13 +40,9 @@ pub enum Commands {
     /// Status of processes
     Status,
     /// Start a process
-    Start {
-        target: String,
-    },
+    Start { target: String },
     /// Stop a process
-    Stop {
-        target: String,
-    },
+    Stop { target: String },
 }
 
 pub async fn cli() -> AppResult {
@@ -110,10 +108,17 @@ fn install() -> AppResult {
     Ok(())
 }
 
+fn uninstall() -> AppResult {
+    #[cfg(windows)]
+    windows::Install::supervisord().uninstall()?;
+    Ok(())
+}
+
 pub async fn command(cmd: Commands) -> AppResult {
     match cmd {
         Commands::Init { config } => init(&config),
         Commands::Install {} => install(),
+        Commands::Uninstall {} => uninstall(),
         Commands::Daemon { config } => app::run(&config).await,
         Commands::Status => client::status().await,
         Commands::Start { target } => client::start(&target).await,

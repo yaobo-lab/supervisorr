@@ -1,5 +1,6 @@
 /*
  注册成windows服务，开机运行
+ tasklist | findstr supervisord
 */
 #![allow(dead_code)]
 use std::ffi::OsString;

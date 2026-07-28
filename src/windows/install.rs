@@ -1,3 +1,10 @@
+// sc.exe query supervisord
+// sc.exe stop supervisord
+// sc.exe create supervisord binPath= "\"C:\ProgramData\supervisord\supervisord.exe\" daemon" DisplayName= Supervisord start= auto obj= LocalSystem
+// sc.exe description supervisord "A watchdog developed by Rust, guarding the base system"
+// sc.exe failure supervisord reset= 60 actions= restart/5000/restart/5000/restart/10000
+// sc.exe start supervisord
+
 #![allow(dead_code)]
 use anyhow::anyhow;
 use toolkit_rs::AppResult;
@@ -73,6 +80,19 @@ fn exe_powershell(script: &str, what: &str) -> AppResult {
 }
 
 fn exe_sc(args: &[&str]) -> AppResult<std::process::Output> {
+    let command = args
+        .iter()
+        .map(|arg| {
+            if arg.contains(char::is_whitespace) {
+                format!("\"{}\"", arg.replace('"', "\\\""))
+            } else {
+                (*arg).to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    log::info!("executing command: sc.exe {}", command);
+
     let out = std::process::Command::new("sc")
         .args(args)
         .output()
@@ -145,7 +165,7 @@ fn remove_service_dir(service_name: &str) -> AppResult {
 
 //sc.exe create supervisord binPath= "C:\ProgramData\supervisord.exe --service"
 fn register_service(exe: &std::path::Path, service_name: &str) -> AppResult {
-    let bin_path = format!("\"{}\" --service", exe.display());
+    let bin_path = format!("\"{}\" daemon", exe.display());
 
     let create = exe_sc(&[
         "create",
@@ -183,7 +203,6 @@ fn register_service(exe: &std::path::Path, service_name: &str) -> AppResult {
         "restart/5000/restart/5000/restart/10000",
     ]);
 
-    log::error!("registered service '{}' (boot-time).", service_name);
     Ok(())
 }
 
@@ -277,17 +296,20 @@ impl Install {
 
     pub fn install(&self) -> AppResult {
         let service_name = self.get_service_name();
+        log::info!("install service: {} start....", service_name);
+
         if is_registered(service_name) {
-            log::error!("stopping existing service...");
+            log::info!("stopping existing service...");
             stop_service(service_name);
         }
 
         let service_exe = copy_service_file(service_name, &self.exe_configs_dirs)?;
         register_service(&service_exe, service_name)?;
-        match start_service(service_name) {
-            Ok(_) => log::info!("service started."),
-            Err(e) => log::error!("warning: service registered but could not start now: {}", e),
-        }
+        log::info!("register service: {} ok", service_name);
+
+        start_service(service_name)?;
+        log::info!("service start ok..");
+        log::info!("install success....");
         Ok(())
     }
     pub fn uninstall(&self) -> AppResult {

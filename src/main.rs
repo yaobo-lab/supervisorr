@@ -10,7 +10,7 @@ async fn main() {
     match supervisord::cli().await {
         Ok(_) => {}
         Err(e) => {
-            eprintln!("err:{}", e)
+            log::error!("supervisord err: {}", e)
         }
     }
 }
