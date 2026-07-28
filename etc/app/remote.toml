@@ -1,0 +1,11 @@
+name = "remote"
+autostart = true
+autorestart = true
+command = "remote.exe start"
+directory = "D:\\demo\\remote"
+stdout_logfile = "D:\\demo\\remote\\stdout.log"
+stderr_logfile = "D:\\demo\\remote\\stderr.err"
+
+[environment]
+PORT = "8080"
+NODE_ENV = "production"

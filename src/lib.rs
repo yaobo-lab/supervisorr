@@ -34,7 +34,7 @@ pub enum Commands {
     Uninstall {},
     /// Internal entry point used by the Windows Service Control Manager
     #[command(hide = true)]
-    Service {},
+    Service { service_name: String },
     /// Starts the supervisor daemon
     Daemon {
         #[arg(short, long, default_value = "./etc")]
@@ -118,8 +118,7 @@ fn uninstall() -> AppResult {
     Ok(())
 }
 
-fn run_as_service() -> AppResult {
-    let service_name = "supervisord";
+fn run_as_service(service_name: &str) -> AppResult {
     #[cfg(windows)]
     windows::service::run_as_service(service_name)?;
 
@@ -137,7 +136,7 @@ pub async fn command(cmd: Commands) -> AppResult {
         }
         Commands::Install {} => install(),
         Commands::Uninstall {} => uninstall(),
-        Commands::Service {} => run_as_service(),
+        Commands::Service { service_name } => run_as_service(&service_name),
         Commands::Daemon { config } => {
             let config = config::resolve_config_path(&config);
             app::run(&config.to_string_lossy()).await
