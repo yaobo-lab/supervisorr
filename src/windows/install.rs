@@ -1,6 +1,6 @@
 // sc.exe query supervisord
 // sc.exe stop supervisord
-// sc.exe create supervisord binPath= "\"C:\ProgramData\supervisord\supervisord.exe\" daemon" DisplayName= Supervisord start= auto obj= LocalSystem
+// sc.exe create supervisord binPath= "\"C:\ProgramData\supervisord\supervisord.exe\" service" DisplayName= Supervisord start= auto obj= LocalSystem
 // sc.exe description supervisord "A watchdog developed by Rust, guarding the base system"
 // sc.exe failure supervisord reset= 60 actions= restart/5000/restart/5000/restart/10000
 // sc.exe start supervisord
@@ -173,9 +173,9 @@ fn remove_service_dir(service_name: &str) {
     let _ = std::fs::remove_dir_all(install_default_dir(service_name));
 }
 
-//sc.exe create supervisord binPath= "C:\ProgramData\supervisord.exe --service"
+//sc.exe create supervisord binPath= "C:\ProgramData\supervisord.exe service"
 fn register_service(exe: &std::path::Path, service_name: &str) -> AppResult {
-    let bin_path = format!("\"{}\" daemon", exe.display());
+    let bin_path = format!("\"{}\" service {}", exe.display(), service_name);
 
     let create = exe_sc(&[
         "create",
