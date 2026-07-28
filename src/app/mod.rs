@@ -1,4 +1,3 @@
-pub mod ipc;
 pub mod state;
 
 use crate::config::ProgramConfig;
@@ -21,6 +20,7 @@ pub async fn run(config_dir: &str) -> AppResult {
 
     let state = Arc::new(RwLock::new(AppState::new(config.clone())));
 
+    //子进程的监管循环
     for (name, cfg) in config.program.into_iter() {
         //初始化时，希望程序运行状态
         let intent = if cfg.autostart {
@@ -49,7 +49,7 @@ pub async fn run(config_dir: &str) -> AppResult {
     let state_clone = Arc::clone(&state);
     let socket_path_clone = socket_path.clone();
     tokio::spawn(async move {
-        if let Err(e) = ipc::setup_ipc(&socket_path_clone, state_clone).await {
+        if let Err(e) = crate::ipc::setup_ipc(&socket_path_clone, state_clone).await {
             eprintln!("IPC server failed: {}", e);
         }
     });

@@ -2,15 +2,51 @@
 use anyhow::anyhow;
 use toolkit_rs::AppResult;
 
-pub fn install_data_dir() -> std::path::PathBuf {
+fn install_default_dir(service_name: &str) -> std::path::PathBuf {
     std::path::PathBuf::from(
         std::env::var("PROGRAMDATA").unwrap_or_else(|_| "C:\\ProgramData".into()),
     )
-    .join("supervisord")
+    .join(service_name)
 }
 
-fn install_exe_path() -> std::path::PathBuf {
-    install_data_dir().join("bin").join("supervisord.exe")
+fn exe_path(service_name: &str) -> std::path::PathBuf {
+    install_default_dir(service_name).join(format!("{}.exe", service_name))
+}
+
+fn copy_dir(src: &std::path::Path, dst: &std::path::Path) -> AppResult {
+    if !src.is_dir() {
+        return Err(anyhow!(
+            "configuration directory not found: {}",
+            src.display()
+        ));
+    }
+
+    std::fs::create_dir_all(dst)
+        .map_err(|e| anyhow!("failed to create {}: {}", dst.display(), e))?;
+
+    for entry in
+        std::fs::read_dir(src).map_err(|e| anyhow!("failed to read {}: {}", src.display(), e))?
+    {
+        let entry =
+            entry.map_err(|e| anyhow!("failed to read entry in {}: {}", src.display(), e))?;
+        let source_path = entry.path();
+        let destination_path = dst.join(entry.file_name());
+
+        if source_path.is_dir() {
+            copy_dir(&source_path, &destination_path)?;
+        } else {
+            std::fs::copy(&source_path, &destination_path).map_err(|e| {
+                anyhow!(
+                    "failed to copy {} -> {}: {}",
+                    source_path.display(),
+                    destination_path.display(),
+                    e
+                )
+            })?;
+        }
+    }
+
+    Ok(())
 }
 
 fn exe_powershell(script: &str, what: &str) -> AppResult {
@@ -44,43 +80,76 @@ fn exe_sc(args: &[&str]) -> AppResult<std::process::Output> {
     Ok(out)
 }
 
-fn install_service_binary() -> AppResult<std::path::PathBuf> {
+fn copy_service_file(
+    service_name: &str,
+    exe_configs_dirs: &[String],
+) -> AppResult<std::path::PathBuf> {
     let src = std::env::current_exe().map_err(|e| anyhow!("current_exe(): {}", e))?;
-    let dst = install_exe_path();
+    let dst = exe_path(service_name);
     if let Some(parent) = dst.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| anyhow!("failed to create {}: {}", parent.display(), e))?;
     }
 
-    // Copy only if source and destination differ; running the binary from
-    // its install location is a supported (re-install) case.
-    if src != dst {
-        std::fs::copy(&src, &dst).map_err(|e| {
-            anyhow!(
-                "failed to copy {} -> {}: {}",
-                src.display(),
-                dst.display(),
-                e
-            )
-        })?;
+    if src == dst {
+        return Ok(src);
     }
+
+    std::fs::copy(&src, &dst).map_err(|e| {
+        anyhow!(
+            "failed to copy {} -> {}: {}",
+            src.display(),
+            dst.display(),
+            e
+        )
+    })?;
+
+    let src_parent = src
+        .parent()
+        .ok_or_else(|| anyhow!("executable has no parent directory: {}", src.display()))?;
+    let dst_parent = dst
+        .parent()
+        .ok_or_else(|| anyhow!("install path has no parent directory: {}", dst.display()))?;
+
+    for dir in exe_configs_dirs {
+        let relative_dir = std::path::Path::new(dir);
+        if relative_dir.is_absolute()
+            || relative_dir.components().any(|component| {
+                matches!(
+                    component,
+                    std::path::Component::ParentDir
+                        | std::path::Component::RootDir
+                        | std::path::Component::Prefix(_)
+                )
+            })
+        {
+            return Err(anyhow!(
+                "configuration directory must be relative to the executable: {}",
+                dir
+            ));
+        }
+
+        copy_dir(
+            &src_parent.join(relative_dir),
+            &dst_parent.join(relative_dir),
+        )?;
+    }
+
     Ok(dst)
 }
 
-fn remove_service_binary() {
-    let _ = std::fs::remove_file(install_exe_path());
+fn remove_service_dir(service_name: &str) -> AppResult {
+    std::fs::remove_dir_all(install_default_dir(service_name))?;
+    Ok(())
 }
 
-fn register_service_scm(exe: &std::path::Path) -> AppResult {
+//sc.exe create supervisord binPath= "C:\ProgramData\supervisord.exe --service"
+fn register_service(exe: &std::path::Path, service_name: &str) -> AppResult {
     let bin_path = format!("\"{}\" --service", exe.display());
-    let name = super::service::SERVICE_NAME;
 
-    // sc.exe uses a leading space as its `name= value` delimiter; the space
-    // after `=` is mandatory. `depend= Dnscache` closes the boot-order race
-    // where numa starts before the resolver Dnscache routes queries to it.
     let create = exe_sc(&[
         "create",
-        name,
+        service_name,
         "binPath=",
         &bin_path,
         "DisplayName=",
@@ -89,8 +158,6 @@ fn register_service_scm(exe: &std::path::Path) -> AppResult {
         "auto",
         "obj=",
         "LocalSystem",
-        "depend=",
-        "Dnscache",
     ])?;
     if !create.status.success() {
         let out = String::from_utf8_lossy(&create.stdout);
@@ -102,26 +169,27 @@ fn register_service_scm(exe: &std::path::Path) -> AppResult {
 
     let _ = exe_sc(&[
         "description",
-        name,
-        "Self-sovereign DNS resolver (ad blocking, DoH/DoT, local zones).",
+        service_name,
+        "A watchdog developed by Rust, guarding the base system",
     ]);
 
     // Restart on crash: 5s, 5s, 10s; reset failure counter after 60s.
     let _ = exe_sc(&[
         "failure",
-        name,
+        service_name,
         "reset=",
         "60",
         "actions=",
         "restart/5000/restart/5000/restart/10000",
     ]);
 
-    eprintln!("  Registered service '{}' (boot-time).", name);
+    log::error!("registered service '{}' (boot-time).", service_name);
     Ok(())
 }
 
-fn start_service_scm() -> AppResult {
-    let out = exe_sc(&["start", super::service::SERVICE_NAME])?;
+fn start_service(service_name: &str) -> AppResult {
+    //sc.exe start supervisord
+    let out = exe_sc(&["start", service_name])?;
     if !out.status.success() {
         let text = String::from_utf8_lossy(&out.stdout);
         // already running
@@ -133,13 +201,12 @@ fn start_service_scm() -> AppResult {
     Ok(())
 }
 
-fn stop_service_scm() {
-    let name = super::service::SERVICE_NAME;
-    let _ = exe_sc(&["stop", name]);
+fn stop_service(service_name: &str) {
+    let _ = exe_sc(&["stop", service_name]);
     // Wait up to 10s for the service to reach STOPPED state so the
     // binary file handle is released before we try to overwrite it.
     for _ in 0..20 {
-        if let Ok(out) = exe_sc(&["query", name]) {
+        if let Ok(out) = exe_sc(&["query", service_name]) {
             let text = String::from_utf8_lossy(&out.stdout);
             if text.contains("STOPPED") || text.contains("1060") {
                 return;
@@ -147,25 +214,25 @@ fn stop_service_scm() {
         }
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
-    eprintln!(" warning: service did not stop within 10s");
+    log::error!("warning: service did not stop within 10s");
 }
 
-fn delete_service_scm() {
-    if let Err(e) = exe_sc(&["delete", super::service::SERVICE_NAME]) {
+fn delete_service(service_name: &str) {
+    if let Err(e) = exe_sc(&["delete", service_name]) {
         log::warn!("sc delete failed: {}", e);
     }
 }
 
-fn service_status_windows() -> AppResult {
-    let out = exe_sc(&["query", super::service::SERVICE_NAME])?;
+fn service_status(service_name: &str) -> AppResult {
+    let out = exe_sc(&["query", service_name])?;
     let text = String::from_utf8_lossy(&out.stdout);
     let display = parse_sc_state(&text);
-    eprintln!("  {}\n", display);
+    log::error!("{}\n", display);
     Ok(())
 }
 
-fn is_registered() -> bool {
-    exe_sc(&["query", super::service::SERVICE_NAME])
+fn is_registered(service_name: &str) -> bool {
+    exe_sc(&["query", service_name])
         .map(|o| parse_sc_registered(o.status.success(), &String::from_utf8_lossy(&o.stdout)))
         .unwrap_or(false)
 }
@@ -189,27 +256,46 @@ fn parse_sc_state(sc_output: &str) -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
-//
-fn uninstall() -> AppResult {
-    stop_service_scm();
-    delete_service_scm();
-    remove_service_binary();
-    eprintln!("uninstalled.\n");
-    Ok(())
+pub struct Install {
+    //可执行文件名
+    pub exe_name: String,
+    //配置文件 目录
+    pub exe_configs_dirs: Vec<String>,
 }
 
-//
-fn install() -> AppResult {
-    if is_registered() {
-        eprintln!("stopping existing service...");
-        stop_service_scm();
+impl Install {
+    pub fn supervisord() -> Self {
+        Self {
+            exe_name: "supervisord".into(),
+            exe_configs_dirs: vec!["./etc".into()],
+        }
     }
 
-    let service_exe = install_exe_path();
-    register_service_scm(&service_exe)?;
-    match start_service_scm() {
-        Ok(_) => eprintln!("service started."),
-        Err(e) => eprintln!("warning: service registered but could not start now: {}", e),
+    fn get_service_name(&self) -> &str {
+        &self.exe_name
     }
-    Ok(())
+
+    pub fn install(&self) -> AppResult {
+        let service_name = self.get_service_name();
+        if is_registered(service_name) {
+            log::error!("stopping existing service...");
+            stop_service(service_name);
+        }
+
+        let service_exe = copy_service_file(service_name, &self.exe_configs_dirs)?;
+        register_service(&service_exe, service_name)?;
+        match start_service(service_name) {
+            Ok(_) => log::info!("service started."),
+            Err(e) => log::error!("warning: service registered but could not start now: {}", e),
+        }
+        Ok(())
+    }
+    pub fn uninstall(&self) -> AppResult {
+        let service_name = self.get_service_name();
+        stop_service(service_name);
+        delete_service(service_name);
+        remove_service_dir(service_name)?;
+        log::info!("uninstalled");
+        Ok(())
+    }
 }

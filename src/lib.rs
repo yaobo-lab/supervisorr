@@ -1,9 +1,10 @@
 pub mod app;
-pub mod client;
-pub mod config;
-pub mod platform;
+pub(crate) mod client;
+pub(crate) mod config;
+pub(crate) mod ipc;
+pub(crate) mod platform;
 #[cfg(feature = "web")]
-pub mod web;
+pub(crate) mod web;
 
 #[cfg(windows)]
 mod windows;
@@ -103,10 +104,16 @@ web.listen_addr = "127.0.0.1"
     Ok(())
 }
 
+fn install() -> AppResult {
+    #[cfg(windows)]
+    windows::Install::supervisord().install()?;
+    Ok(())
+}
+
 pub async fn command(cmd: Commands) -> AppResult {
     match cmd {
         Commands::Init { config } => init(&config),
-        Commands::Install {} => Ok(()),
+        Commands::Install {} => install(),
         Commands::Daemon { config } => app::run(&config).await,
         Commands::Status => client::status().await,
         Commands::Start { target } => client::start(&target).await,

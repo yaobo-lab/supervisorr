@@ -12,17 +12,21 @@ use windows_service::service::{
 use windows_service::service_control_handler::{self, ServiceControlHandlerResult};
 use windows_service::{define_windows_service, service_dispatcher};
 
-pub const SERVICE_NAME: &str = "supervisord";
-
 define_windows_service!(ffi_service_main, service_main);
 
-fn service_main(_arguments: Vec<OsString>) {
-    if let Err(e) = run_service() {
-        log::error!("supervisord service exited with error: {:?}", e);
+//sc.exe start supervisord
+fn service_main(arguments: Vec<OsString>) {
+    let Some(service_name) = arguments.first().and_then(|value| value.to_str()) else {
+        log::error!("Windows SCM did not provide a valid service name");
+        return;
+    };
+
+    if let Err(e) = run_service(service_name) {
+        log::error!("service '{}' exited with error: {:?}", service_name, e);
     }
 }
 
-fn run_service() -> windows_service::Result<()> {
+fn run_service(service_name: &str) -> windows_service::Result<()> {
     let (shutdown_tx, shutdown_rx) = mpsc::channel::<()>();
 
     let event_handler = move |evt| -> ServiceControlHandlerResult {
@@ -37,7 +41,7 @@ fn run_service() -> windows_service::Result<()> {
     };
 
     // Register system service event handler
-    let status_handle = service_control_handler::register(SERVICE_NAME, event_handler)?;
+    let status_handle = service_control_handler::register(service_name, event_handler)?;
 
     // Tell the system that the service is running now
     status_handle.set_service_status(ServiceStatus {
@@ -56,7 +60,10 @@ fn run_service() -> windows_service::Result<()> {
         process_id: None,
     })?;
 
-    let config_path = crate::config::default_config_path();
+    let config_path = std::env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(|parent| parent.join("etc")))
+        .unwrap_or_else(|| std::path::PathBuf::from(crate::config::default_config_path()));
     let (server_done_tx, server_done_rx) = mpsc::channel::<()>();
 
     let server_thread = std::thread::spawn(move || {
@@ -72,7 +79,7 @@ fn run_service() -> windows_service::Result<()> {
             }
         };
 
-        if let Err(e) = runtime.block_on(crate::app::run(config_path)) {
+        if let Err(e) = runtime.block_on(crate::app::run(&config_path.to_string_lossy())) {
             log::error!("supervisord serve exited with error: {}", e);
         }
         let _ = server_done_tx.send(());
@@ -107,6 +114,6 @@ fn run_service() -> windows_service::Result<()> {
     Ok(())
 }
 
-pub fn run_as_service() -> windows_service::Result<()> {
-    service_dispatcher::start(SERVICE_NAME, ffi_service_main)
+pub fn run_as_service(service_name: &str) -> windows_service::Result<()> {
+    service_dispatcher::start(service_name, ffi_service_main)
 }

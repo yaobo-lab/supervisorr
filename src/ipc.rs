@@ -32,14 +32,14 @@ pub async fn setup_ipc(endpoint: &str, state: SharedState) -> AppResult {
         permissions.set_mode(0o600);
         std::fs::set_permissions(endpoint, permissions)?;
     }
-    println!("IPC server listening on {endpoint}");
+    log::info!("IPC server listening on {endpoint}");
 
     loop {
         let (stream, _) = listener.accept().await?;
         let state = Arc::clone(&state);
         tokio::spawn(async move {
             if let Err(error) = handle_client(stream, state).await {
-                eprintln!("Error handling IPC client: {error}");
+                log::error!("Error handling IPC client: {error}");
             }
         });
     }
@@ -50,14 +50,14 @@ pub async fn setup_ipc(endpoint: &str, state: SharedState) -> AppResult {
     use std::sync::Arc;
     use tokio::net::windows::named_pipe::ServerOptions;
 
-    println!("IPC server listening on {endpoint}");
+    log::info!("IPC server listening on {endpoint}");
     loop {
         let server = ServerOptions::new().create(endpoint)?;
         server.connect().await?;
         let state = Arc::clone(&state);
         tokio::spawn(async move {
             if let Err(error) = handle_client(server, state).await {
-                eprintln!("Error handling IPC client: {error}");
+                log::error!("Error handling IPC client: {error}");
             }
         });
     }

@@ -1,4 +1,4 @@
-use crate::app::ipc::{IpcRequest, IpcResponse};
+use crate::ipc::{IpcRequest, IpcResponse};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use toolkit_rs::AppResult;
 async fn exchange<S>(mut stream: S, request: IpcRequest) -> AppResult<IpcResponse>
