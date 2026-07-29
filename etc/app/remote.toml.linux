@@ -1,0 +1,11 @@
+name = "remote"
+autostart = true
+autorestart = true
+command = "exec ./remote start"
+directory = "/mnt/d/rust-code/supervisorr/example/remote"
+stdout_logfile = "/mnt/d/rust-code/supervisorr/example/remote/stdout.log"
+stderr_logfile = "/mnt/d/rust-code/supervisorr/example/remote/stderr.err"
+
+[environment]
+PORT = "8080"
+NODE_ENV = "production"

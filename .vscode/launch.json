@@ -1,0 +1,27 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug supervisord",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin",
+                    "supervisord"
+                ],
+                "filter": {
+                    "name": "supervisord",
+                    "kind": "bin"
+                }
+            },
+            "cwd": "${workspaceFolder}/target/debug",
+            "args": [],
+            "terminal": "integrated",
+            "sourceLanguages": [
+                "rust"
+            ]
+        }
+    ]
+}

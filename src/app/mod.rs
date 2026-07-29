@@ -1,5 +1,4 @@
 pub mod state;
-
 use crate::config::ProgramConfig;
 use state::{AppState, Intent, ProcessState, SharedState, Status};
 use std::fs::OpenOptions;
@@ -50,7 +49,7 @@ pub async fn run(config_dir: &str) -> AppResult {
     let socket_path_clone = socket_path.clone();
     tokio::spawn(async move {
         if let Err(e) = crate::ipc::setup_ipc(&socket_path_clone, state_clone).await {
-            eprintln!("IPC server failed: {}", e);
+            log::error!("IPC server failed: {}", e);
         }
     });
 
@@ -59,7 +58,7 @@ pub async fn run(config_dir: &str) -> AppResult {
         let state_clone_web = Arc::clone(&state);
         tokio::spawn(async move {
             if let Err(e) = crate::web::start(state_clone_web).await {
-                eprintln!("Web server failed: {}", e);
+                log::error!("Web server failed: {}", e);
             }
         });
     }
@@ -123,6 +122,8 @@ async fn supervisord_app(name: String, config: ProgramConfig, state: SharedState
             cmd.stderr(Stdio::null());
         }
 
+        //Command { std: cd "/mnt/d/rust-code/supervisorr/example/remote" && NODE_ENV="production" PORT="8080" "sh" "-c" "remote start", kill_on_drop: false }
+        // println!("Starting process `{name}` with command: {cmd:?}");
         match cmd.spawn() {
             Ok(mut child) => {
                 let pid = child.id().unwrap_or(0);
@@ -210,7 +211,7 @@ async fn shutdown_processes(state: &SharedState) {
 
     for pid in pids {
         if let Err(error) = crate::platform::kill_process(pid).await {
-            eprintln!("Failed to stop child process {pid}: {error}");
+            log::error!("Failed to stop child process {pid}: {error}");
         }
     }
 }

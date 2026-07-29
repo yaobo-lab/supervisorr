@@ -15,7 +15,7 @@ mod windows;
 mod unix;
 
 use clap::{Parser, Subcommand};
-use std::process;
+use std::{path::Path, process};
 use toolkit_rs::{AppResult, logger};
 
 use crate::iface::IInstall;
@@ -53,25 +53,6 @@ pub enum Commands {
     Start { target: String },
     /// Stop a process
     Stop { target: String },
-}
-
-pub async fn cli() -> AppResult {
-    let cli = Cli::parse();
-    let config_path = match &cli.command {
-        Commands::Init { config } | Commands::Daemon { config } => config.as_str(),
-        _ => config::default_config_path(),
-    };
-    let config_path = config::resolve_config_path(config_path);
-    let base_config_path = config_path.join("config.toml");
-    if base_config_path.is_file() {
-        let cfg = config::load_basic(&base_config_path.to_string_lossy());
-        logger::setup(cfg.log.clone()).unwrap_or_else(|error| {
-            println!("日志初始化失败: {error:?}");
-            process::exit(1);
-        });
-    }
-
-    command(cli.command).await
 }
 
 fn init(config: &std::path::Path) -> AppResult {
@@ -137,6 +118,39 @@ fn run_as_windows_service(service_name: &str) -> AppResult {
     anyhow::bail!("Windows service mode is only supported on Windows");
 
     Ok(())
+}
+
+pub async fn cli() -> AppResult {
+    let cli = Cli::parse();
+    let config_path = match &cli.command {
+        Commands::Init { config } | Commands::Daemon { config } => config.as_str(),
+        _ => config::default_config_path(),
+    };
+    let config_path = config::resolve_config_path(config_path);
+    let base_config_path = config_path.join("config.toml");
+    if base_config_path.is_file() {
+        let cfg = config::load_basic(&base_config_path.to_string_lossy());
+        logger::setup(cfg.log.clone()).unwrap_or_else(|error| {
+            println!("日志初始化失败: {error:?}");
+            process::exit(1);
+        });
+    }
+    command(cli.command).await
+}
+
+pub async fn _cli() -> AppResult {
+    let config_path = Path::new("/mnt/d/rust-code/supervisorr/etc");
+    let base_config_path = config_path.join("config.toml");
+    println!("path-->:{}", base_config_path.to_string_lossy());
+
+    if base_config_path.is_file() {
+        let cfg = config::load_basic(&base_config_path.to_string_lossy());
+        logger::setup(cfg.log.clone()).unwrap_or_else(|error| {
+            println!("日志初始化失败: {error:?}");
+            process::exit(1);
+        });
+    }
+    app::run(&config_path.to_string_lossy()).await
 }
 
 pub async fn command(cmd: Commands) -> AppResult {
