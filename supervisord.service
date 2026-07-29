@@ -4,7 +4,7 @@ Description=Supervisord
 [Service]
 PrivateTmp=true
 Type=simple
-ExecStart=/data/nats/nats -c /data/nats/nats.conf
+ExecStart={{exe_path}} daemon
 ExecReload=/bin/kill -s HUP $MAINPID
 ExecStop=/bin/kill -s SIGUSR2  $MAINPID 
 TimeoutStopSec=150

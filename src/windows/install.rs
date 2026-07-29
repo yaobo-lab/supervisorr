@@ -10,6 +10,8 @@ use anyhow::anyhow;
 use encoding_rs::GBK;
 use toolkit_rs::AppResult;
 
+use crate::iface::IInstall;
+
 fn decode_windows_output(bytes: &[u8]) -> String {
     match std::str::from_utf8(bytes) {
         Ok(text) => text.to_owned(),
@@ -288,14 +290,14 @@ fn parse_sc_state(sc_output: &str) -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
-pub struct Install {
+pub struct WindowsInstall {
     //可执行文件名
     pub exe_name: String,
     //配置文件 目录
     pub exe_configs_dirs: Vec<String>,
 }
 
-impl Install {
+impl WindowsInstall {
     pub fn supervisord() -> Self {
         Self {
             exe_name: "supervisord".into(),
@@ -306,8 +308,10 @@ impl Install {
     fn get_service_name(&self) -> &str {
         &self.exe_name
     }
+}
 
-    pub fn install(&self) -> AppResult {
+impl IInstall for WindowsInstall {
+    fn install(&self) -> AppResult {
         let service_name = self.get_service_name();
         log::info!("install service: {} start....", service_name);
 
@@ -325,7 +329,7 @@ impl Install {
         log::info!("install success....");
         Ok(())
     }
-    pub fn uninstall(&self) -> AppResult {
+    fn uninstall(&self) -> AppResult {
         let service_name = self.get_service_name();
         stop_service(service_name);
         delete_service(service_name);

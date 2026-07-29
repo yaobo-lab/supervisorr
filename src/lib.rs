@@ -1,6 +1,7 @@
 pub mod app;
 pub(crate) mod client;
 pub(crate) mod config;
+pub(crate) mod iface;
 pub(crate) mod ipc;
 pub(crate) mod platform;
 
@@ -10,14 +11,14 @@ pub(crate) mod web;
 #[cfg(windows)]
 mod windows;
 
+#[cfg(unix)]
 mod unix;
-
-// #[cfg(unix)]
-// mod unix;
 
 use clap::{Parser, Subcommand};
 use std::process;
 use toolkit_rs::{AppResult, logger};
+
+use crate::iface::IInstall;
 
 #[derive(Parser)]
 #[command(name = "supervisord")]
@@ -112,18 +113,29 @@ web.listen_addr = "127.0.0.1"
     Ok(())
 }
 
+fn install_iface() -> Box<dyn IInstall> {
+    let inst: Box<dyn IInstall> = {
+        #[cfg(windows)]
+        {
+            Box::new(windows::WindowsInstall::supervisord())
+        }
+        #[cfg(unix)]
+        {
+            Box::new(unix::SystemdInstall::supervisord())
+        }
+    };
+    inst
+}
+
 fn install() -> AppResult {
-    #[cfg(windows)]
-    windows::Install::supervisord().install()?;
-    Ok(())
+    install_iface().install()
 }
 
 fn uninstall() -> AppResult {
-    #[cfg(windows)]
-    windows::Install::supervisord().uninstall()?;
-    Ok(())
+    install_iface().uninstall()
 }
 
+//windows service
 fn run_as_service(service_name: &str) -> AppResult {
     #[cfg(windows)]
     windows::service::run_as_service(service_name)?;
@@ -142,6 +154,7 @@ pub async fn command(cmd: Commands) -> AppResult {
         }
         Commands::Install {} => install(),
         Commands::Uninstall {} => uninstall(),
+        //windows service use
         Commands::Service { service_name } => run_as_service(&service_name),
         Commands::Daemon { config } => {
             let config = config::resolve_config_path(&config);
