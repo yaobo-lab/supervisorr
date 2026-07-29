@@ -8,10 +8,17 @@ pub enum IpcRequest {
     Start { target: String },
     Stop { target: String },
 }
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AppStatus {
+    pub pid: String,
+    pub name: String,
+    pub status: String,
+    pub intended: String,
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum IpcResponse {
-    StatusData(std::collections::HashMap<String, String>),
+    StatusData(Vec<AppStatus>),
     Ok,
     Error(String),
 }
@@ -97,24 +104,35 @@ async fn process(request: IpcRequest, state: SharedState) -> IpcResponse {
     match request {
         IpcRequest::Status => {
             let state = state.read().await;
-            let data = state
+            let list = state
                 .processes
                 .iter()
                 .map(|(name, process)| {
+                    let mut pid = "--".to_string();
+
                     let status = match &process.status {
                         Status::Stopped => "STOPPED".to_string(),
-                        Status::Running(pid) => format!("RUNNING (pid {pid})"),
+                        Status::Running(p) => {
+                            pid = format!("{}", p);
+                            format!("RUNNING")
+                        }
                         Status::Exited(code) => format!("EXITED (code {code})"),
                         Status::Failed(error) => format!("FAILED ({error})"),
                     };
                     let intent = match process.intent {
-                        Intent::Run => "intended: RUN",
-                        Intent::Stop => "intended: STOP",
+                        Intent::Run => "RUN",
+                        Intent::Stop => "STOP",
                     };
-                    (name.clone(), format!("{status} [{intent}]"))
+                    AppStatus {
+                        pid: pid,
+                        name: name.clone(),
+                        status: format!("{status}"),
+                        intended: format!("{intent}"),
+                    }
                 })
                 .collect();
-            IpcResponse::StatusData(data)
+
+            IpcResponse::StatusData(list)
         }
         IpcRequest::Start { target } => {
             let mut state = state.write().await;

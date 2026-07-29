@@ -89,6 +89,38 @@ PORT = "8080"
 NODE_ENV = "production"
 ```
 
+Linux 示例（`etc/app/remote.toml.linux`）：
+
+```toml
+name = "remote"
+autostart = true
+autorestart = true
+command = "exec ./remote start"
+directory = "/mnt/d/rust-code/supervisorr/example/remote"
+stdout_logfile = "/mnt/d/rust-code/supervisorr/example/remote/stdout.log"
+stderr_logfile = "/mnt/d/rust-code/supervisorr/example/remote/stderr.err"
+
+[environment]
+PORT = "8080"
+NODE_ENV = "production"
+```
+
+Windows 示例（`etc/app/remote.toml.windows`）：
+
+```toml
+name = "remote"
+autostart = true
+autorestart = true
+command = "remote.exe start"
+directory = "D:\\demo\\remote"
+stdout_logfile = "D:\\demo\\remote\\stdout.log"
+stderr_logfile = "D:\\demo\\remote\\stderr.err"
+
+[environment]
+PORT = "8080"
+NODE_ENV = "production"
+```
+
 程序配置字段：
 
 | 字段 | 必填 | 默认值 | 说明 |
@@ -264,6 +296,38 @@ autostart = true
 autorestart = true
 stdout_logfile = "/var/log/api.log"
 stderr_logfile = "/var/log/api.err"
+
+[environment]
+PORT = "8080"
+NODE_ENV = "production"
+```
+
+Linux example (`etc/app/remote.toml.linux`):
+
+```toml
+name = "remote"
+autostart = true
+autorestart = true
+command = "exec ./remote start"
+directory = "/mnt/d/rust-code/supervisorr/example/remote"
+stdout_logfile = "/mnt/d/rust-code/supervisorr/example/remote/stdout.log"
+stderr_logfile = "/mnt/d/rust-code/supervisorr/example/remote/stderr.err"
+
+[environment]
+PORT = "8080"
+NODE_ENV = "production"
+```
+
+Windows example (`etc/app/remote.toml.windows`):
+
+```toml
+name = "remote"
+autostart = true
+autorestart = true
+command = "remote.exe start"
+directory = "D:\\demo\\remote"
+stdout_logfile = "D:\\demo\\remote\\stdout.log"
+stderr_logfile = "D:\\demo\\remote\\stderr.err"
 
 [environment]
 PORT = "8080"

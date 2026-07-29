@@ -59,10 +59,21 @@ fn path_world_traversable_linux(p: &std::path::Path) -> bool {
 
 fn copy_binary(service_name: &str) -> AppResult<std::path::PathBuf> {
     let src = std::env::current_exe().map_err(|e| anyhow!("current_exe(): {}", e))?;
+    let dst = cli_path(service_name);
+
     if path_world_traversable_linux(&src) {
+        //copy cli
+        std::fs::copy(&src, &dst).map_err(|e| {
+            anyhow!(
+                "failed to copy {} -> {}: {}",
+                src.display(),
+                dst.display(),
+                e
+            )
+        })?;
+
         return Ok(src);
     }
-    let dst = cli_path(service_name);
     if src == dst {
         return Ok(dst);
     }

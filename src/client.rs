@@ -1,12 +1,28 @@
 use crate::ipc::{IpcRequest, IpcResponse};
+use tabled::{
+    Table, Tabled,
+    settings::style::{HorizontalLine, Style},
+};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use toolkit_rs::AppResult;
+
+#[derive(Tabled)]
+struct StatusRow {
+    #[tabled(rename = "PID")]
+    pid: String,
+    #[tabled(rename = "APP")]
+    name: String,
+    #[tabled(rename = "STATUS")]
+    status: String,
+    #[tabled(rename = "CTL")]
+    intended: String,
+}
+
 async fn exchange<S>(mut stream: S, request: IpcRequest) -> AppResult<IpcResponse>
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {
     stream.write_all(&serde_json::to_vec(&request)?).await?;
-
     let mut buffer = Vec::new();
     stream.read_to_end(&mut buffer).await?;
     Ok(serde_json::from_slice(&buffer)?)
@@ -35,10 +51,26 @@ pub async fn status() -> AppResult {
         IpcResponse::StatusData(data) => {
             if data.is_empty() {
                 println!("No processes configured.");
+                return Ok(());
             }
-            for (name, status) in data {
-                println!("{name:<20} {status}");
-            }
+
+            let mut rows: Vec<_> = data
+                .into_iter()
+                .map(|d| StatusRow {
+                    pid: d.pid,
+                    name: d.name,
+                    status: d.status,
+                    intended: d.intended,
+                })
+                .collect();
+            rows.sort_by(|left, right| left.name.cmp(&right.name));
+
+            let mut table = Table::new(rows);
+            table.with(
+                Style::blank()
+                    .horizontals([(1, HorizontalLine::new('-').intersection('-'))]),
+            );
+            println!("{table}");
         }
         IpcResponse::Error(error) => println!("Error: {error}"),
         _ => println!("Unexpected response"),
