@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::iface::IInstall;
 use anyhow::anyhow;
 use toolkit_rs::AppResult;

@@ -1,15 +1,15 @@
 [Unit]
-Description=Supervisord
+Description=Supervisord Process Supervisor
+After=network.target
 
 [Service]
-PrivateTmp=true
 Type=simple
-ExecStart={{exe_path}} daemon
-ExecReload=/bin/kill -s HUP $MAINPID
-ExecStop=/bin/kill -s SIGUSR2  $MAINPID 
-TimeoutStopSec=150
+WorkingDirectory={{WorkingDirectory}}
+ExecStart={{ExePath}} daemon
 Restart=on-failure
- 
+RestartSec=3s
+TimeoutStopSec=30s
+KillMode=control-group
 
 [Install]
 WantedBy=multi-user.target

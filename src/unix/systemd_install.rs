@@ -1,8 +1,6 @@
+use crate::iface::IInstall;
 use anyhow::anyhow;
 use toolkit_rs::AppResult;
-
-use crate::iface::IInstall;
-const SYSTEMD_UNIT: &str = "/etc/systemd/system/supervisord.service";
 
 fn exe_systemctl(args: &[&str]) -> AppResult {
     let status = std::process::Command::new("systemctl")
@@ -20,11 +18,11 @@ fn exe_systemctl(args: &[&str]) -> AppResult {
     }
 }
 
-fn cli_exe_path() -> std::path::PathBuf {
-    std::path::PathBuf::from("/usr/local/bin/supervisord")
+fn cli_path(service_name: &str) -> std::path::PathBuf {
+    std::path::PathBuf::from(format!("/usr/local/bin/{}", service_name))
 }
 
-fn is_systemd_resolved_active() -> bool {
+fn _is_systemd_resolved_active() -> bool {
     std::process::Command::new("systemctl")
         .args(["is-active", "--quiet", "systemd-resolved"])
         .status()
@@ -59,12 +57,12 @@ fn path_world_traversable_linux(p: &std::path::Path) -> bool {
     true
 }
 
-fn copy_binary() -> AppResult<std::path::PathBuf> {
+fn copy_binary(service_name: &str) -> AppResult<std::path::PathBuf> {
     let src = std::env::current_exe().map_err(|e| anyhow!("current_exe(): {}", e))?;
     if path_world_traversable_linux(&src) {
         return Ok(src);
     }
-    let dst = cli_exe_path();
+    let dst = cli_path(service_name);
     if src == dst {
         return Ok(dst);
     }
@@ -96,51 +94,82 @@ fn copy_binary() -> AppResult<std::path::PathBuf> {
 }
 
 pub struct SystemdInstall {
-    //可执行文件名
-    pub exe_name: String,
-    //配置文件 目录
-    pub exe_configs_dirs: Vec<String>,
+    bin_name: String,
+    systemd_unit_path: String,
 }
 
 impl SystemdInstall {
     pub fn supervisord() -> Self {
         Self {
-            exe_name: "supervisord".into(),
-            exe_configs_dirs: vec!["./etc".into()],
+            bin_name: "supervisord".into(),
+            systemd_unit_path: "/etc/systemd/system/supervisord.service".into(),
         }
     }
+
+    pub fn supervisord_systemd_file(&self) -> &'static str {
+        "[Unit]
+Description=Supervisord Process Supervisor
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory={{WorkingDir}}
+ExecStart={{ExePath}} daemon
+Restart=on-failure
+RestartSec=3s
+TimeoutStopSec=30s
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target"
+    }
     fn get_service_name(&self) -> &str {
-        &self.exe_name
+        &self.bin_name
     }
 }
 
 impl IInstall for SystemdInstall {
     fn install(&self) -> AppResult {
-        let exe = copy_binary()?;
-        let unit = include_str!("../../supervisord.service")
-            .replace("{{exe_path}}", &exe.to_string_lossy());
+        let src = std::env::current_exe().map_err(|e| anyhow!("current_exe(): {}", e))?;
 
-        std::fs::write(SYSTEMD_UNIT, unit)
-            .map_err(|e| anyhow!("failed to write {}: {}", SYSTEMD_UNIT, e))?;
+        let Some(parent) = src.parent() else {
+            return Err(anyhow!("install WorkingDirectory is emtpy"));
+        };
+
+        let service_name = self.get_service_name();
+        let exe = copy_binary(service_name)?;
+        let unit = self
+            .supervisord_systemd_file()
+            .replace("{{ExePath}}", &exe.to_string_lossy())
+            .replace("{{WorkingDir}}", &parent.to_string_lossy());
+
+        std::fs::write(self.systemd_unit_path.as_str(), unit)
+            .map_err(|e| anyhow!("failed to write {}: {}", self.systemd_unit_path, e))?;
 
         exe_systemctl(&["daemon-reload"])?;
-        exe_systemctl(&["enable", "supervisord"])?;
-        exe_systemctl(&["restart", "supervisord"])?;
+        exe_systemctl(&["enable", service_name])?;
+        exe_systemctl(&["restart", service_name])?;
         log::info!("install ok..");
         Ok(())
     }
 
     fn uninstall(&self) -> AppResult {
-        if let Err(e) = exe_systemctl(&["stop", "supervisord"]) {
+        let service_name = self.get_service_name();
+
+        if let Err(e) = exe_systemctl(&["stop", service_name]) {
             log::warn!("warning: {}", e);
         }
-        if let Err(e) = exe_systemctl(&["disable", "supervisord"]) {
+        if let Err(e) = exe_systemctl(&["disable", service_name]) {
             log::warn!("warning: {}", e);
         }
 
-        if let Err(e) = std::fs::remove_file(SYSTEMD_UNIT) {
+        if let Err(e) = std::fs::remove_file(&self.systemd_unit_path) {
             if e.kind() != std::io::ErrorKind::NotFound {
-                return Err(anyhow!("failed to remove {}: {}", SYSTEMD_UNIT, e));
+                return Err(anyhow!(
+                    "failed to remove {}: {}",
+                    self.systemd_unit_path,
+                    e
+                ));
             }
         }
         let _ = exe_systemctl(&["daemon-reload"]);

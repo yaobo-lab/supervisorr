@@ -128,6 +128,7 @@ fn install_iface() -> Box<dyn IInstall> {
 }
 
 //windows service
+#[allow(unused)]
 fn run_as_windows_service(service_name: &str) -> AppResult {
     #[cfg(windows)]
     windows::service::run_as_service(service_name)?;
