@@ -3,11 +3,17 @@ pub(crate) mod client;
 pub(crate) mod config;
 pub(crate) mod ipc;
 pub(crate) mod platform;
+
 #[cfg(feature = "web")]
 pub(crate) mod web;
 
 #[cfg(windows)]
 mod windows;
+
+mod unix;
+
+// #[cfg(unix)]
+// mod unix;
 
 use clap::{Parser, Subcommand};
 use std::process;

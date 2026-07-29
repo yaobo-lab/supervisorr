@@ -1,0 +1,15 @@
+[Unit]
+Description=Supervisord
+
+[Service]
+PrivateTmp=true
+Type=simple
+ExecStart=/data/nats/nats -c /data/nats/nats.conf
+ExecReload=/bin/kill -s HUP $MAINPID
+ExecStop=/bin/kill -s SIGUSR2  $MAINPID 
+TimeoutStopSec=150
+Restart=on-failure
+ 
+
+[Install]
+WantedBy=multi-user.target
