@@ -127,16 +127,8 @@ fn install_iface() -> Box<dyn IInstall> {
     inst
 }
 
-fn install() -> AppResult {
-    install_iface().install()
-}
-
-fn uninstall() -> AppResult {
-    install_iface().uninstall()
-}
-
 //windows service
-fn run_as_service(service_name: &str) -> AppResult {
+fn run_as_windows_service(service_name: &str) -> AppResult {
     #[cfg(windows)]
     windows::service::run_as_service(service_name)?;
 
@@ -152,10 +144,10 @@ pub async fn command(cmd: Commands) -> AppResult {
             let config = config::resolve_config_path(&config);
             init(&config)
         }
-        Commands::Install {} => install(),
-        Commands::Uninstall {} => uninstall(),
+        Commands::Install {} => install_iface().install(),
+        Commands::Uninstall {} => install_iface().uninstall(),
         //windows service use
-        Commands::Service { service_name } => run_as_service(&service_name),
+        Commands::Service { service_name } => run_as_windows_service(&service_name),
         Commands::Daemon { config } => {
             let config = config::resolve_config_path(&config);
             app::run(&config.to_string_lossy()).await
